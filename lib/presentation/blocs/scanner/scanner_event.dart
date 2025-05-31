@@ -27,5 +27,12 @@ class SubmitScan extends ScannerEvent {
   List<Object> get props => [serialNumber];
 }
 
+class RetryScan extends ScannerEvent {
+  const RetryScan();
+
+  @override
+  List<Object> get props => [];
+}
+
 class ResetScanner extends ScannerEvent {}
 
