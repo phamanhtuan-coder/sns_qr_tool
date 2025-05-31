@@ -18,4 +18,14 @@ class ScanQR extends ScannerEvent {
   List<Object> get props => [purpose, data, error ?? {}];
 }
 
+class SubmitScan extends ScannerEvent {
+  final String serialNumber;
+
+  const SubmitScan(this.serialNumber);
+
+  @override
+  List<Object> get props => [serialNumber];
+}
+
 class ResetScanner extends ScannerEvent {}
+

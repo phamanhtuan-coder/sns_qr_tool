@@ -182,14 +182,25 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                     title: state.result['title'],
                     message: state.result['message'],
                     details: Map<String, String>.from(state.result['details']),
-                    onClose: _safePop,
+                    onClose: () {
+                      if (state.result['actions']?.contains('dashboard') ?? false) {
+                        _safePop();
+                      } else {
+                        _scannerBloc.add(ResetScanner());
+                      }
+                    },
                     onContinue: () {
-                      setState(() {
-                        _isScanning = true;
-                        _controller.start();
-                        _startScanTimeout();
-                      });
-                      _scannerBloc.add(ResetScanner());
+                      if (state.result['actions']?.contains('submit') ?? false) {
+                        final serial = state.result['details']['device_serial'] as String;
+                        _scannerBloc.add(SubmitScan(serial));
+                      } else if (state.result['actions']?.contains('scan_more') ?? false) {
+                        setState(() {
+                          _isScanning = true;
+                          _controller.start();
+                          _startScanTimeout();
+                        });
+                        _scannerBloc.add(ResetScanner());
+                      }
                     },
                   );
                 } else if (state is ScannerFailure) {
@@ -198,7 +209,13 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                     title: state.error['title'],
                     message: state.error['message'],
                     details: Map<String, String>.from(state.error['details'] ?? {}),
-                    onClose: _safePop,
+                    onClose: () {
+                      if (state.error['actions']?.contains('dashboard') ?? false) {
+                        _safePop();
+                      } else {
+                        _scannerBloc.add(ResetScanner());
+                      }
+                    },
                     onContinue: state.error['action'] == 'open_settings'
                         ? () => openAppSettings()
                         : () {

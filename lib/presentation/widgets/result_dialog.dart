@@ -23,10 +23,14 @@ class ResultDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final isSuccess = type == 'success';
     final formattedDetails = _formatDetails();
+    final actions = details['actions'] as List<String>? ?? [];
 
     return Stack(
       children: [
-        Container(color: Colors.black.withOpacity(0.7)),
+        GestureDetector(
+          onTap: onClose,
+          child: Container(color: Colors.black.withAlpha(179)), // 0.7 * 255 ≈ 179
+        ),
         Center(
           child: SingleChildScrollView(
             child: Container(
@@ -43,7 +47,7 @@ class ResultDialog extends StatelessWidget {
                   _buildHeader(context, isSuccess),
                   if (formattedDetails.isNotEmpty)
                     _buildDetailsSection(context, formattedDetails),
-                  _buildActions(context, isSuccess),
+                  _buildActions(context, isSuccess, actions),
                 ],
               ),
             ),
@@ -57,7 +61,7 @@ class ResultDialog extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isSuccess ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+        color: (isSuccess ? Colors.green : Colors.red).withAlpha(26), // 0.1 * 255 ≈ 26
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Row(
@@ -151,7 +155,7 @@ class ResultDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildActions(BuildContext context, bool isSuccess) {
+  Widget _buildActions(BuildContext context, bool isSuccess, List<String> actions) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -161,25 +165,38 @@ class ResultDialog extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (!isSuccess || onContinue != null)
+          if (actions.isEmpty)
             Expanded(
-              child: TextButton(
+              child: ElevatedButton(
                 onPressed: onClose,
-                child: Text(isSuccess ? 'Đóng' : 'Thử lại'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isSuccess ? Colors.green : Colors.blue,
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+                child: Text(isSuccess ? 'Xác nhận' : 'Thử lại'),
+              ),
+            )
+          else ...[
+            if (actions.contains('retry') || actions.contains('scan_more'))
+              Expanded(
+                child: TextButton(
+                  onPressed: onContinue,
+                  child: Text(actions.contains('scan_more') ? 'Quét tiếp' : 'Thử lại'),
+                ),
+              ),
+            if (actions.contains('retry') || actions.contains('scan_more'))
+              const SizedBox(width: 16),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: actions.contains('submit') ? onContinue : onClose,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: actions.contains('submit') ? Colors.blue : (isSuccess ? Colors.green : Colors.red),
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+                child: Text(actions.contains('submit') ? 'Gửi thông tin' : (actions.contains('dashboard') ? 'Quay về' : 'Xác nhận')),
               ),
             ),
-          if (!isSuccess || onContinue != null)
-            const SizedBox(width: 16),
-          Expanded(
-            child: ElevatedButton(
-              onPressed: isSuccess && onContinue != null ? onContinue : onClose,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isSuccess ? Colors.green : Colors.blue,
-                minimumSize: const Size(double.infinity, 48),
-              ),
-              child: Text(isSuccess && onContinue != null ? 'Quét tiếp' : 'Xác nhận'),
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -197,12 +214,11 @@ class ResultDialog extends StatelessWidget {
 
   List<MapEntry<String, String>> _formatDetails() {
     final formattedDetails = <MapEntry<String, String>>[];
+    final allowedKeys = ['device_serial', 'stage', 'status'];
 
     details.forEach((key, value) {
-      // Skip internal error codes and technical details in success case
-      if (type == 'success' && (key == 'errorCode' || key == 'reason')) {
-        return;
-      }
+      // Only show allowed keys
+      if (!allowedKeys.contains(key)) return;
 
       // Format keys for display
       String displayKey = key
@@ -215,13 +231,10 @@ class ResultDialog extends StatelessWidget {
 
       // Format values for display
       String displayValue = value;
-      if (key == 'timestamp') {
-        try {
-          final date = DateTime.parse(value);
-          displayValue = '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute}';
-        } catch (_) {}
-      } else if (key == 'rawData' && value.length > 50) {
-        displayValue = '${value.substring(0, 50)}...';
+      if (key == 'stage') {
+        displayValue = value == 'assembly' ? 'Lắp ráp' : value;
+      } else if (key == 'status') {
+        displayValue = value == 'in_progress' ? 'Đang xử lý' : value;
       }
 
       formattedDetails.add(MapEntry(displayKey, displayValue));
@@ -230,4 +243,3 @@ class ResultDialog extends StatelessWidget {
     return formattedDetails;
   }
 }
-
