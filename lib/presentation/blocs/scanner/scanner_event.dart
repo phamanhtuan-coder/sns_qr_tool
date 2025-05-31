@@ -20,11 +20,12 @@ class ScanQR extends ScannerEvent {
 
 class SubmitScan extends ScannerEvent {
   final String serialNumber;
+  final String functionId;
 
-  const SubmitScan(this.serialNumber);
+  const SubmitScan(this.serialNumber, this.functionId);
 
   @override
-  List<Object> get props => [serialNumber];
+  List<Object> get props => [serialNumber, functionId];
 }
 
 class RetryScan extends ScannerEvent {

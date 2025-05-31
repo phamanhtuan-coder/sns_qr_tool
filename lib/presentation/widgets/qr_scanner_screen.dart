@@ -144,7 +144,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     }
 
     setState(() => _isSubmitting = true);
-    _scannerBloc.add(SubmitScan(serial));
+    _scannerBloc.add(SubmitScan(serial, widget.purpose));
   }
 
   void _safePop() {
@@ -168,7 +168,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     if (barcode == null || barcode.rawValue == null || barcode.rawValue!.isEmpty) {
       _controller.stop();
       _scannerBloc.add(ScanQR(widget.purpose, '', error: const {
-        'title': 'Quét thất bại',
+        'title': 'Quét th���t bại',
         'message': 'Không thể đọc mã QR. Vui lòng thử lại.',
         'details': {
           'errorCode': 'QR-002',

@@ -13,10 +13,14 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
   final ScannerService _scannerService = getIt<ScannerService>();
   final ProductionService _productionService = getIt<ProductionService>();
   final CameraService _cameraService = getIt<CameraService>();
+  String _currentFunctionId = ''; // Store current function ID/purpose
 
   ScannerBloc() : super(const ScannerInitial()) {
     on<ScanQR>((event, emit) async {
       try {
+        // Store the current function ID for later use
+        _currentFunctionId = event.purpose;
+
         if (event.error != null) {
           emit(ScannerFailure(error: event.error!));
           await _cameraService.stop();
@@ -53,14 +57,16 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           return;
         }
 
-        // Handle other purposes (to be implemented later)
+        // Handle other purposes
         await _cameraService.stop();
-        emit(const ScannerFailure(error: {
-          'title': 'Chức năng chưa hỗ trợ',
-          'message': 'Chức năng này đang được phát triển.',
-          'details': {'errorCode': 'FUNC-001', 'reason': 'Not implemented', 'actions': ['dashboard']},
+        emit(ScannerSuccess(result: {
+          'title': 'Quét thành công',
+          'message': 'Đã quét thiết bị thành công',
+          'details': {'device_serial': event.data},
+          'actions': const ['retry', 'submit'],
         }));
       } catch (e, stackTrace) {
+        print("DEBUG: Exception in SubmitScan handler: $e");
         logError('Lỗi xử lý sự kiện ScanQR', e, stackTrace);
         await _cameraService.stop();
         emit(ScannerFailure(error: {
@@ -72,7 +78,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
     });
 
     on<SubmitScan>((event, emit) async {
-      print("DEBUG: SubmitScan event received with serialNumber: ${event.serialNumber}");
+      print("DEBUG: SubmitScan event received with serialNumber: ${event.serialNumber}, functionId: ${event.functionId}");
       try {
         if (event.serialNumber.isEmpty) {
           print("DEBUG: Empty serial number");
@@ -84,8 +90,11 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           return;
         }
 
-        print("DEBUG: Calling processScannedSerial with serial: ${event.serialNumber}");
-        final result = await _productionService.processScannedSerial(event.serialNumber);
+        print("DEBUG: Calling processScannedSerial with serial: ${event.serialNumber}, functionId: ${event.functionId}");
+        final result = await _productionService.processScannedSerial(
+          event.serialNumber,
+          functionId: event.functionId,
+        );
         print("DEBUG: API result: $result");
 
         if (result['success']) {
@@ -153,3 +162,4 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
     return super.close();
   }
 }
+
