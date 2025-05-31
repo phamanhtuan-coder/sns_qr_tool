@@ -8,14 +8,42 @@ class ProductionService {
   ProductionService({ApiClient? apiClient}) : _apiClient = apiClient ?? ApiClient();
 
   Future<Map<String, dynamic>> updateDeviceStage(String serialNumber, String stage, String status) async {
-    return _apiClient.patch(
-      '/production-tracking/update-serial',
-      {
-        'device_serial': serialNumber,
-        'stage': stage,
-        'status': status,
-      },
-    );
+    try {
+      final result = await _apiClient.patch(
+        '/production-tracking/update-serial',
+        {
+          'device_serial': serialNumber,
+          'stage': stage,
+          'status': status,
+        },
+      );
+
+      return result;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to update device stage: ${e.toString()}',
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> processScannedSerial(String serialNumber, {String stage = 'qc', String status = 'pending'}) async {
+    if (serialNumber.isEmpty) {
+      return {
+        'success': false,
+        'message': 'Serial number cannot be empty',
+      };
+    }
+
+    try {
+      final result = await updateDeviceStage(serialNumber, stage, status);
+      return result;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error processing serial number: ${e.toString()}',
+      };
+    }
   }
 
   void dispose() {

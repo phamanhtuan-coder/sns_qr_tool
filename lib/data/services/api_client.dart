@@ -75,6 +75,7 @@ class ApiClient {
       );
 
       final responseData = json.decode(response.body);
+      print('Response body: $responseData');
       return {
         'success': response.statusCode == 200 && (responseData['success'] ?? false),
         'errorCode': responseData['errorCode'],

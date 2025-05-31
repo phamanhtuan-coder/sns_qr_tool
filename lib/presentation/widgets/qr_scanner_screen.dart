@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:firmware_deployment_tool/data/services/camera_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -9,7 +11,6 @@ import 'package:firmware_deployment_tool/presentation/widgets/result_dialog.dart
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
-import '../../data/services/auth_service.dart';
 import '../../utils/di.dart';
 
 class QRScannerScreen extends StatefulWidget {
@@ -25,16 +26,63 @@ class QRScannerScreen extends StatefulWidget {
 class _QRScannerScreenState extends State<QRScannerScreen> {
   bool _isDeviceSupported = false;
   bool _isScanning = true;
+  bool _isSubmitting = false;
   final MobileScannerController _controller = MobileScannerController();
   late final ScannerBloc _scannerBloc;
+  late final CameraService _cameraService;
+  StreamSubscription<String>? _cameraErrorSubscription;
 
   @override
   void initState() {
     super.initState();
     _scannerBloc = getIt<ScannerBloc>();
+    _cameraService = getIt<CameraService>();
+    _setupCameraErrorListener();
     _checkDeviceSupport();
     _startScanTimeout();
   }
+
+
+
+  void _setupCameraErrorListener() {
+    _cameraErrorSubscription = _cameraService.onCameraError.listen((errorMsg) {
+      print("DEBUG: Camera error detected: $errorMsg");
+      if (mounted) {
+        setState(() => _isScanning = false);
+        _handleCameraError("Camera hardware error detected. Please try again.");
+      }
+    });
+  }
+
+  void _handleCameraError(String message) {
+    _scannerBloc.add(ResetScanner());
+    _scannerBloc.add(ScanQR(widget.purpose, '', error: {
+      'title': 'Lỗi camera',
+      'message': message,
+      'details': const {
+        'errorCode': 'CAM-002',
+        'reason': 'Camera hardware error',
+        'actions': ['retry', 'dashboard']
+      },
+    }));
+  }
+
+  Future<void> _retryScanning() async {
+    print("DEBUG: Attempting camera restart for retry");
+    setState(() => _isScanning = false);
+
+    await _controller.stop(); // <-- Đảm bảo dừng scanner
+    await _controller.start(); // <-- Sau đó khởi động lại
+
+    if (mounted) {
+      setState(() {
+        _isScanning = true;
+        _startScanTimeout();
+      });
+      _scannerBloc.add(ResetScanner());
+    }
+  }
+
 
   Future<void> _checkDeviceSupport() async {
     try {
@@ -53,7 +101,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
       if (!isSupported) {
         _scannerBloc.add(ResetScanner());
-        _scannerBloc.add(ScanQR(widget.purpose, '', error: {
+        _scannerBloc.add(ScanQR(widget.purpose, '', error: const {
           'title': 'Thiết bị không hỗ trợ',
           'message': 'Thiết bị này không hỗ trợ quét QR. Vui lòng sử dụng thiết bị khác.',
           'details': {'errorCode': 'DEVICE-001', 'reason': 'No camera support'},
@@ -76,10 +124,14 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       if (mounted && _isScanning) {
         setState(() => _isScanning = false);
         _controller.stop();
-        _scannerBloc.add(ScanQR(widget.purpose, '', error: {
+        _scannerBloc.add(ScanQR(widget.purpose, '', error: const {
           'title': 'Hết thời gian quét',
           'message': 'Không tìm thấy mã QR trong 10 giây. Vui lòng thử lại.',
-          'details': {'errorCode': 'QR-003', 'reason': 'Timeout'},
+          'details': {
+            'errorCode': 'QR-003',
+            'reason': 'Timeout',
+            'actions': ['retry']
+          },
         }));
       }
     });
@@ -92,11 +144,74 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     }
   }
 
+  void _handleDetection(BarcodeCapture capture) {
+    if (!_isScanning) return;
+
+    final barcode = capture.barcodes.firstOrNull;
+
+    if (_isScanning) {
+      setState(() => _isScanning = false);
+      _controller.stop(); // gọi đúng 1 lần
+      _scannerBloc.add(ScanQR(widget.purpose, barcode!.rawValue!));
+    }
+
+    if (barcode == null || barcode.rawValue == null || barcode.rawValue!.isEmpty) {
+      _controller.stop();
+      _scannerBloc.add(ScanQR(widget.purpose, '', error: const {
+        'title': 'Quét thất bại',
+        'message': 'Không thể đọc mã QR. Vui lòng thử lại.',
+        'details': {
+          'errorCode': 'QR-002',
+          'reason': 'Invalid or empty QR code',
+          'actions': ['retry']
+        },
+      }));
+      // Sử dụng addPostFrameCallback để tránh setState trong build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _isScanning = false);
+        }
+      });
+      return;
+    }
+
+    _controller.stop();
+    // Sử dụng addPostFrameCallback để tránh setState trong build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _isScanning = false);
+      }
+    });
+    _scannerBloc.add(ScanQR(widget.purpose, barcode.rawValue!));
+  }
+
+  void _handleError(MobileScannerException error) {
+    if (!_isScanning) return;
+
+    _controller.stop();
+    _scannerBloc.add(ScanQR(widget.purpose, '', error: {
+      'title': 'Lỗi camera',
+      'message': 'Không thể truy cập camera. Vui lòng kiểm tra thiết bị.',
+      'details': {
+        'errorCode': 'CAM-001',
+        'reason': error.toString(),
+        'actions': const ['dashboard']
+      },
+    }));
+    // Sử dụng addPostFrameCallback để tránh setState trong build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _isScanning = false);
+      }
+    });
+  }
+
   @override
   void dispose() {
     _controller.stop();
     _controller.dispose();
     _isScanning = false;
+    _cameraErrorSubscription?.cancel();
     super.dispose();
   }
 
@@ -107,30 +222,13 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       child: Scaffold(
         body: Stack(
           children: [
+
             if (_isDeviceSupported && _isScanning)
               MobileScanner(
                 controller: _controller,
-                onDetect: (capture) {
-                  final barcode = capture.barcodes.firstOrNull;
-                  if (barcode == null || barcode.rawValue == null || barcode.rawValue!.isEmpty) {
-                    _scannerBloc.add(ScanQR(widget.purpose, '', error: {
-                      'title': 'Quét thất bại',
-                      'message': 'Không thể đọc mã QR. Vui lòng thử lại.',
-                      'details': {'errorCode': 'QR-002', 'reason': 'Invalid or empty QR code'},
-                    }));
-                    setState(() => _isScanning = false);
-                    return;
-                  }
-                  setState(() => _isScanning = false);
-                  _scannerBloc.add(ScanQR(widget.purpose, barcode.rawValue!));
-                },
+                onDetect: _handleDetection,
                 errorBuilder: (context, error, child) {
-                  _scannerBloc.add(ScanQR(widget.purpose, '', error: {
-                    'title': 'Lỗi camera',
-                    'message': 'Không thể truy cập camera. Vui lòng kiểm tra thiết bị.',
-                    'details': {'errorCode': 'CAM-001', 'reason': error.toString()},
-                  }));
-                  setState(() => _isScanning = false);
+                  _handleError(error);
                   return const SizedBox.shrink();
                 },
               ),
@@ -167,7 +265,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                   ),
                 ),
                 child: Text(
-                  _isScanning ? 'Position the QR code within the frame to scan' : 'Quét tạm dừng. Nhấn "Thử lại" để tiếp tục.',
+                  _isScanning ? 'Đặt mã QR vào khung để quét' : 'Quét tạm dừng. Nhấn "Thử lại" để tiếp tục.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                 ),
@@ -177,55 +275,95 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               bloc: _scannerBloc,
               builder: (context, state) {
                 if (state is ScannerSuccess) {
+                  final Map<String, dynamic> details = Map<String, dynamic>.from(state.result['details']);
+                  final actions = state.result['actions'] as List<dynamic>? ?? [];
+
+                  print("DEBUG: Showing dialog with actions: $actions");
+                  print("DEBUG: Details: $details");
+
                   return ResultDialog(
                     type: 'success',
-                    title: state.result['title'],
-                    message: state.result['message'],
-                    details: Map<String, String>.from(state.result['details']),
-                    onClose: () {
-                      if (state.result['actions']?.contains('dashboard') ?? false) {
+                    title: state.result['title'] as String,
+                    message: state.result['message'] as String,
+                    details: details.map((key, value) => MapEntry(key, value.toString())),
+                    actions: actions.map((e) => e.toString()).toList(),
+                    isLoading: _isSubmitting,
+                    onContinue: () {
+                      print("DEBUG: onContinue called with actions: $actions");
+                      if (actions.contains('retry')) {
+                        print("DEBUG: Retry action detected");
+                        _retryScanning();
+                      } else if (actions.contains('submit')) {
+                        print("DEBUG: Submit button pressed explicitly");
+                        setState(() => _isSubmitting = true);
+                        final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
+                        print("DEBUG: Will submit scan with serial: $serial");
+                        if (serial.isNotEmpty) {
+                          _scannerBloc.add(SubmitScan(serial));
+                        } else {
+                          print("DEBUG: Serial string is empty, cannot submit");
+                          _scannerBloc.add(ResetScanner());
+                          setState(() => _isSubmitting = false);
+                        }
+                      } else if (actions.contains('dashboard')) {
+                        print("DEBUG: Dashboard action detected");
                         _safePop();
                       } else {
-                        _scannerBloc.add(ResetScanner());
+                        print("DEBUG: No matching action found in $actions");
                       }
                     },
-                    onContinue: () {
-                      if (state.result['actions']?.contains('submit') ?? false) {
-                        final serial = state.result['details']['device_serial'] as String;
-                        _scannerBloc.add(SubmitScan(serial));
-                      } else if (state.result['actions']?.contains('scan_more') ?? false) {
-                        setState(() {
-                          _isScanning = true;
-                          _controller.start();
-                          _startScanTimeout();
-                        });
-                        _scannerBloc.add(ResetScanner());
+                    onClose: () {
+                      print("DEBUG: onClose called with actions: $actions");
+                      if (actions.contains('dashboard')) {
+                        _safePop();
+                      } else {
+                        _retryScanning();
                       }
                     },
                   );
                 } else if (state is ScannerFailure) {
+                  final Map<String, dynamic> details = Map<String, dynamic>.from(state.error['details'] ?? {});
+                  final actions = state.error['actions'] as List<dynamic>? ?? [];
+
                   return ResultDialog(
                     type: 'error',
-                    title: state.error['title'],
-                    message: state.error['message'],
-                    details: Map<String, String>.from(state.error['details'] ?? {}),
-                    onClose: () {
-                      if (state.error['actions']?.contains('dashboard') ?? false) {
+                    title: state.error['title'] as String,
+                    message: state.error['message'] as String,
+                    details: details.map((key, value) => MapEntry(key, value.toString())),
+                    actions: actions.map((e) => e.toString()).toList(),
+                    isLoading: _isSubmitting,
+                    onContinue: () {
+                      print("DEBUG: onContinue called with actions: $actions");
+                      if (actions.contains('retry')) {
+                        print("DEBUG: Retry action detected");
+                        _retryScanning();
+                      } else if (actions.contains('submit')) {
+                        print("DEBUG: Submit button pressed explicitly");
+                        setState(() => _isSubmitting = true);
+                        final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
+                        print("DEBUG: Will submit scan with serial: $serial");
+                        if (serial.isNotEmpty) {
+                          _scannerBloc.add(SubmitScan(serial));
+                        } else {
+                          print("DEBUG: Serial string is empty, cannot submit");
+                          _scannerBloc.add(ResetScanner());
+                          setState(() => _isSubmitting = false);
+                        }
+                      } else if (actions.contains('dashboard')) {
+                        print("DEBUG: Dashboard action detected");
                         _safePop();
                       } else {
-                        _scannerBloc.add(ResetScanner());
+                        print("DEBUG: No matching action found in $actions");
                       }
                     },
-                    onContinue: state.error['action'] == 'open_settings'
-                        ? () => openAppSettings()
-                        : () {
-                            setState(() {
-                              _isScanning = true;
-                              _controller.start();
-                              _startScanTimeout();
-                            });
-                            _scannerBloc.add(ResetScanner());
-                          },
+                    onClose: () {
+                      print("DEBUG: onClose called with actions: $actions");
+                      if (actions.contains('dashboard')) {
+                        _safePop();
+                      } else {
+                        _retryScanning();
+                      }
+                    },
                   );
                 }
                 return const SizedBox.shrink();

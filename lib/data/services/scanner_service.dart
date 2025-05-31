@@ -1,8 +1,12 @@
 import 'package:permission_handler/permission_handler.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'dart:async';
 
 class ScannerService {
   final MobileScannerController controller = MobileScannerController();
+  final StreamController<String> _scannedSerialController = StreamController<String>.broadcast();
+
+  Stream<String> get onSerialScanned => _scannedSerialController.stream;
 
   Future<Map<String, dynamic>> requestCameraPermission() async {
     var status = await Permission.camera.status;
@@ -45,11 +49,25 @@ class ScannerService {
       return null;
     }
 
-    return null;
+    // This should be used in a widget to actually start the scanning
+    try {
+      await controller.start();
+      return "Scanning started"; // In reality, you'd handle the scan in the UI with a Completer
+    } catch (e) {
+      return null;
+    }
+  }
+
+  void onBarcodeDetected(Barcode barcode) {
+    if (barcode.rawValue != null) {
+      final serialNumber = barcode.rawValue!;
+      _scannedSerialController.add(serialNumber);
+    }
   }
 
   void dispose() {
     controller.dispose();
+    _scannedSerialController.close();
   }
 }
 

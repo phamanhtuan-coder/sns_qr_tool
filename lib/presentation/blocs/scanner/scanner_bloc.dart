@@ -35,6 +35,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
             'title': 'Quét thất bại',
             'message': 'Không thể đọc mã QR. Vui lòng thử lại.',
             'details': {'errorCode': 'QR-001', 'reason': 'Empty QR data'},
+            'actions': ['retry', 'dashboard'],
           }));
           await _cameraService.stop();
           return;
@@ -47,7 +48,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
             'title': 'Quét thành công',
             'message': 'Đã quét thiết bị thành công',
             'details': {'device_serial': event.data},
-            'actions': const ['submit', 'retry'],
+            'actions': const ['retry', 'submit'],
           }));
           return;
         }
@@ -57,7 +58,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
         emit(const ScannerFailure(error: {
           'title': 'Chức năng chưa hỗ trợ',
           'message': 'Chức năng này đang được phát triển.',
-          'details': {'errorCode': 'FUNC-001', 'reason': 'Not implemented'},
+          'details': {'errorCode': 'FUNC-001', 'reason': 'Not implemented', 'actions': ['dashboard']},
         }));
       } catch (e, stackTrace) {
         logError('Lỗi xử lý sự kiện ScanQR', e, stackTrace);
@@ -65,62 +66,83 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
         emit(ScannerFailure(error: {
           'title': 'Lỗi hệ thống',
           'message': 'Đã xảy ra lỗi khi xử lý quét mã QR.',
-          'details': {'errorCode': 'SYS-001', 'reason': e.toString()},
+          'details': {'errorCode': 'SYS-001', 'reason': e.toString(), 'actions': ['retry', 'dashboard']},
         }));
       }
     });
 
     on<SubmitScan>((event, emit) async {
+      print("DEBUG: SubmitScan event received with serialNumber: ${event.serialNumber}");
       try {
         if (event.serialNumber.isEmpty) {
+          print("DEBUG: Empty serial number");
           emit(const ScannerFailure(error: {
             'title': 'Lỗi dữ liệu',
             'message': 'Không có thông tin thiết bị để gửi.',
-            'details': {'errorCode': 'DATA-001', 'reason': 'Empty serial number'},
+            'details': {'errorCode': 'DATA-001', 'reason': 'Empty serial number', 'actions': ['retry', 'dashboard']},
           }));
           return;
         }
 
-        final result = await _productionService.updateDeviceStage(
-          event.serialNumber,
-          'assembly',
-          'in_progress',
-        );
+        print("DEBUG: Calling processScannedSerial with serial: ${event.serialNumber}");
+        final result = await _productionService.processScannedSerial(event.serialNumber);
+        print("DEBUG: API result: $result");
 
         if (result['success']) {
+          print("DEBUG: API call successful, emitting success state");
           emit(ScannerSuccess(result: {
             'title': 'Thành công',
             'message': 'Đã cập nhật thông tin thiết bị thành công',
             'details': {
               'device_serial': event.serialNumber,
-              'stage': 'assembly',
-              'status': 'in_progress'
+              'stage': result['data']?['stage'] ?? 'Unknown',
+              'status': result['data']?['status'] ?? 'Unknown'
             },
-            'actions': const ['scan_more', 'dashboard'],
+            'actions': const ['retry', 'dashboard'],
           }));
         } else {
+          print("DEBUG: API call failed: ${result['message']}");
           emit(ScannerFailure(error: {
             'title': 'Lỗi cập nhật',
-            'message': result['message'],
+            'message': result['message'] ?? 'Không thể cập nhật thông tin thiết bị.',
             'details': {
-              'errorCode': result['errorCode'],
-              'reason': result['message'],
+              'errorCode': result['errorCode'] ?? 'API-001',
+              'reason': result['message'] ?? 'Unknown error',
+              'device_serial': event.serialNumber,
             },
             'actions': const ['retry', 'dashboard'],
           }));
         }
       } catch (e, stackTrace) {
+        print("DEBUG: Exception in SubmitScan handler: $e");
         logError('Lỗi xử lý sự kiện SubmitScan', e, stackTrace);
         emit(ScannerFailure(error: {
           'title': 'Lỗi hệ thống',
           'message': 'Đã xảy ra lỗi khi cập nhật thông tin thiết bị.',
-          'details': {'errorCode': 'SYS-002', 'reason': e.toString()},
+          'details': {
+            'errorCode': 'SYS-002',
+            'reason': e.toString(),
+            'device_serial': event.serialNumber,
+            'actions': ['retry', 'dashboard']
+          },
         }));
       }
     });
 
     on<RetryScan>((event, emit) async {
-      await _cameraService.restart();
+      try {
+        await _cameraService.reset();
+        emit(const ScannerInitial());
+      } catch (e) {
+        emit(ScannerFailure(error: {
+          'title': 'Lỗi khởi động lại',
+          'message': 'Không thể khởi động lại quá trình quét.',
+          'details': {'errorCode': 'SYS-003', 'reason': e.toString(), 'actions': ['dashboard']},
+        }));
+      }
+    });
+
+    on<ResetScanner>((event, emit) {
       emit(const ScannerInitial());
     });
   }
