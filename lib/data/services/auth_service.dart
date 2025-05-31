@@ -1,5 +1,4 @@
 import 'package:firmware_deployment_tool/data/models/user.dart';
-import 'package:get_it/get_it.dart';
 
 class AuthService {
   User? _user;
@@ -18,8 +17,3 @@ class AuthService {
   User? get user => _user;
 }
 
-final getIt = GetIt.instance;
-
-void setupDependencies() {
-  getIt.registerSingleton<AuthService>(AuthService());
-}

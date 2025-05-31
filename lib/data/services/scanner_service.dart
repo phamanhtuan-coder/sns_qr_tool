@@ -1,4 +1,3 @@
-import 'package:get_it/get_it.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -53,7 +52,4 @@ class ScannerService {
     controller.dispose();
   }
 }
-
-final getIt = GetIt.instance;
-
 

@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 import '../../data/services/auth_service.dart';
+import '../../utils/di.dart';
 
 class QRScannerScreen extends StatefulWidget {
   final String purpose;
@@ -25,10 +26,12 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   bool _isDeviceSupported = false;
   bool _isScanning = true;
   final MobileScannerController _controller = MobileScannerController();
+  late final ScannerBloc _scannerBloc;
 
   @override
   void initState() {
     super.initState();
+    _scannerBloc = getIt<ScannerBloc>();
     _checkDeviceSupport();
     _startScanTimeout();
   }
@@ -49,8 +52,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       setState(() => _isDeviceSupported = isSupported);
 
       if (!isSupported) {
-        context.read<ScannerBloc>().add(ResetScanner());
-        context.read<ScannerBloc>().add(ScanQR(widget.purpose, '', error: {
+        _scannerBloc.add(ResetScanner());
+        _scannerBloc.add(ScanQR(widget.purpose, '', error: {
           'title': 'Thiết bị không hỗ trợ',
           'message': 'Thiết bị này không hỗ trợ quét QR. Vui lòng sử dụng thiết bị khác.',
           'details': {'errorCode': 'DEVICE-001', 'reason': 'No camera support'},
@@ -58,8 +61,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         setState(() => _isScanning = false);
       }
     } catch (e) {
-      context.read<ScannerBloc>().add(ResetScanner());
-      context.read<ScannerBloc>().add(ScanQR(widget.purpose, '', error: {
+      _scannerBloc.add(ResetScanner());
+      _scannerBloc.add(ScanQR(widget.purpose, '', error: {
         'title': 'Lỗi thiết bị',
         'message': 'Không thể kiểm tra hỗ trợ thiết bị. Vui lòng thử lại.',
         'details': {'errorCode': 'DEVICE-002', 'reason': e.toString()},
@@ -73,7 +76,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       if (mounted && _isScanning) {
         setState(() => _isScanning = false);
         _controller.stop();
-        context.read<ScannerBloc>().add(ScanQR(widget.purpose, '', error: {
+        _scannerBloc.add(ScanQR(widget.purpose, '', error: {
           'title': 'Hết thời gian quét',
           'message': 'Không tìm thấy mã QR trong 10 giây. Vui lòng thử lại.',
           'details': {'errorCode': 'QR-003', 'reason': 'Timeout'},
@@ -93,13 +96,14 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   void dispose() {
     _controller.stop();
     _controller.dispose();
+    _isScanning = false;
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => getIt<ScannerBloc>(),
+    return BlocProvider.value(
+      value: _scannerBloc,
       child: Scaffold(
         body: Stack(
           children: [
@@ -109,7 +113,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                 onDetect: (capture) {
                   final barcode = capture.barcodes.firstOrNull;
                   if (barcode == null || barcode.rawValue == null || barcode.rawValue!.isEmpty) {
-                    context.read<ScannerBloc>().add(ScanQR(widget.purpose, '', error: {
+                    _scannerBloc.add(ScanQR(widget.purpose, '', error: {
                       'title': 'Quét thất bại',
                       'message': 'Không thể đọc mã QR. Vui lòng thử lại.',
                       'details': {'errorCode': 'QR-002', 'reason': 'Invalid or empty QR code'},
@@ -118,10 +122,10 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                     return;
                   }
                   setState(() => _isScanning = false);
-                  context.read<ScannerBloc>().add(ScanQR(widget.purpose, barcode.rawValue!));
+                  _scannerBloc.add(ScanQR(widget.purpose, barcode.rawValue!));
                 },
                 errorBuilder: (context, error, child) {
-                  context.read<ScannerBloc>().add(ScanQR(widget.purpose, '', error: {
+                  _scannerBloc.add(ScanQR(widget.purpose, '', error: {
                     'title': 'Lỗi camera',
                     'message': 'Không thể truy cập camera. Vui lòng kiểm tra thiết bị.',
                     'details': {'errorCode': 'CAM-001', 'reason': error.toString()},
@@ -170,6 +174,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               ),
             ),
             BlocBuilder<ScannerBloc, ScannerState>(
+              bloc: _scannerBloc,
               builder: (context, state) {
                 if (state is ScannerSuccess) {
                   return ResultDialog(
@@ -184,7 +189,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                         _controller.start();
                         _startScanTimeout();
                       });
-                      context.read<ScannerBloc>().add(ResetScanner());
+                      _scannerBloc.add(ResetScanner());
                     },
                   );
                 } else if (state is ScannerFailure) {
@@ -197,13 +202,13 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                     onContinue: state.error['action'] == 'open_settings'
                         ? () => openAppSettings()
                         : () {
-                      setState(() {
-                        _isScanning = true;
-                        _controller.start();
-                        _startScanTimeout();
-                      });
-                      context.read<ScannerBloc>().add(ResetScanner());
-                    },
+                            setState(() {
+                              _isScanning = true;
+                              _controller.start();
+                              _startScanTimeout();
+                            });
+                            _scannerBloc.add(ResetScanner());
+                          },
                   );
                 }
                 return const SizedBox.shrink();
@@ -227,3 +232,4 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     return titles[purpose] ?? 'Quét mã QR';
   }
 }
+
