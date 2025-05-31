@@ -42,8 +42,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     _startScanTimeout();
   }
 
-
-
   void _setupCameraErrorListener() {
     _cameraErrorSubscription = _cameraService.onCameraError.listen((errorMsg) {
       print("DEBUG: Camera error detected: $errorMsg");
@@ -82,7 +80,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       _scannerBloc.add(ResetScanner());
     }
   }
-
 
   Future<void> _checkDeviceSupport() async {
     try {
@@ -135,6 +132,19 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         }));
       }
     });
+  }
+
+  void _handleSubmit(String serial) {
+    print("DEBUG: Submit action with serial: $serial");
+    if (serial.isEmpty) {
+      print("DEBUG: Serial string is empty, cannot submit");
+      _scannerBloc.add(ResetScanner());
+      setState(() => _isSubmitting = false);
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    _scannerBloc.add(SubmitScan(serial));
   }
 
   void _safePop() {
@@ -222,7 +232,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       child: Scaffold(
         body: Stack(
           children: [
-
             if (_isDeviceSupported && _isScanning)
               MobileScanner(
                 controller: _controller,
@@ -277,9 +286,10 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                 if (state is ScannerSuccess) {
                   final Map<String, dynamic> details = Map<String, dynamic>.from(state.result['details']);
                   final actions = state.result['actions'] as List<dynamic>? ?? [];
+                  final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
 
-                  print("DEBUG: Showing dialog with actions: $actions");
-                  print("DEBUG: Details: $details");
+                  print("DEBUG: Showing success dialog with actions: $actions");
+                  print("DEBUG: Success details: $details");
 
                   return ResultDialog(
                     type: 'success',
@@ -288,32 +298,26 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                     details: details.map((key, value) => MapEntry(key, value.toString())),
                     actions: actions.map((e) => e.toString()).toList(),
                     isLoading: _isSubmitting,
-                    onContinue: () {
-                      print("DEBUG: onContinue called with actions: $actions");
-                      if (actions.contains('retry')) {
-                        print("DEBUG: Retry action detected");
-                        _retryScanning();
-                      } else if (actions.contains('submit')) {
-                        print("DEBUG: Submit button pressed explicitly");
-                        setState(() => _isSubmitting = true);
-                        final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
-                        print("DEBUG: Will submit scan with serial: $serial");
-                        if (serial.isNotEmpty) {
-                          _scannerBloc.add(SubmitScan(serial));
-                        } else {
-                          print("DEBUG: Serial string is empty, cannot submit");
-                          _scannerBloc.add(ResetScanner());
-                          setState(() => _isSubmitting = false);
-                        }
-                      } else if (actions.contains('dashboard')) {
-                        print("DEBUG: Dashboard action detected");
-                        _safePop();
-                      } else {
-                        print("DEBUG: No matching action found in $actions");
-                      }
-                    },
+                    onSubmit: actions.contains('submit')
+                        ? () {
+                            print("DEBUG: Submit button pressed with serial: $serial");
+                            _handleSubmit(serial);
+                          }
+                        : null,
+                    onRetry: actions.contains('retry')
+                        ? () {
+                            print("DEBUG: Retry button pressed");
+                            _retryScanning();
+                          }
+                        : null,
+                    onDashboard: actions.contains('dashboard')
+                        ? () {
+                            print("DEBUG: Dashboard button pressed");
+                            _safePop();
+                          }
+                        : null,
                     onClose: () {
-                      print("DEBUG: onClose called with actions: $actions");
+                      print("DEBUG: Dialog closed");
                       if (actions.contains('dashboard')) {
                         _safePop();
                       } else {
@@ -324,6 +328,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                 } else if (state is ScannerFailure) {
                   final Map<String, dynamic> details = Map<String, dynamic>.from(state.error['details'] ?? {});
                   final actions = state.error['actions'] as List<dynamic>? ?? [];
+                  final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
+
+                  print("DEBUG: Showing failure dialog with actions: $actions");
 
                   return ResultDialog(
                     type: 'error',
@@ -332,32 +339,26 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                     details: details.map((key, value) => MapEntry(key, value.toString())),
                     actions: actions.map((e) => e.toString()).toList(),
                     isLoading: _isSubmitting,
-                    onContinue: () {
-                      print("DEBUG: onContinue called with actions: $actions");
-                      if (actions.contains('retry')) {
-                        print("DEBUG: Retry action detected");
-                        _retryScanning();
-                      } else if (actions.contains('submit')) {
-                        print("DEBUG: Submit button pressed explicitly");
-                        setState(() => _isSubmitting = true);
-                        final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
-                        print("DEBUG: Will submit scan with serial: $serial");
-                        if (serial.isNotEmpty) {
-                          _scannerBloc.add(SubmitScan(serial));
-                        } else {
-                          print("DEBUG: Serial string is empty, cannot submit");
-                          _scannerBloc.add(ResetScanner());
-                          setState(() => _isSubmitting = false);
-                        }
-                      } else if (actions.contains('dashboard')) {
-                        print("DEBUG: Dashboard action detected");
-                        _safePop();
-                      } else {
-                        print("DEBUG: No matching action found in $actions");
-                      }
-                    },
+                    onSubmit: actions.contains('submit')
+                        ? () {
+                            print("DEBUG: Submit button pressed with serial: $serial");
+                            _handleSubmit(serial);
+                          }
+                        : null,
+                    onRetry: actions.contains('retry')
+                        ? () {
+                            print("DEBUG: Retry button pressed");
+                            _retryScanning();
+                          }
+                        : null,
+                    onDashboard: actions.contains('dashboard')
+                        ? () {
+                            print("DEBUG: Dashboard button pressed");
+                            _safePop();
+                          }
+                        : null,
                     onClose: () {
-                      print("DEBUG: onClose called with actions: $actions");
+                      print("DEBUG: Dialog closed");
                       if (actions.contains('dashboard')) {
                         _safePop();
                       } else {

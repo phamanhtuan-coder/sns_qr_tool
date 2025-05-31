@@ -27,7 +27,10 @@ class ProductionService {
     }
   }
 
-  Future<Map<String, dynamic>> processScannedSerial(String serialNumber, {String stage = 'qc', String status = 'pending'}) async {
+  Future<Map<String, dynamic>> processScannedSerial(
+    String serialNumber,
+    {required String functionId}
+  ) async {
     if (serialNumber.isEmpty) {
       return {
         'success': false,
@@ -35,7 +38,44 @@ class ProductionService {
       };
     }
 
+    // Handle stockin and stockout as features under development
+    if (functionId == 'stockin' || functionId == 'stockout') {
+      return {
+        'success': false,
+        'message': 'Tính năng đang phát triển',
+        'isFeatureInDevelopment': true,
+      };
+    }
+
+    // Define stage and status based on the selected function
+    String stage;
+    String status;
+
+    switch (functionId) {
+      case 'identify':
+        stage = 'assembly';
+        status = 'in_progress';
+        break;
+      case 'firmware':
+        stage = 'assembly';
+        status = 'firmware_upload';
+        break;
+      case 'testing':
+        stage = 'qc';
+        status = 'firmware_uploaded';
+        break;
+      case 'packaging':
+        stage = 'completed';
+        status = 'pending_packaging';
+        break;
+      default:
+        // Default fallback
+        stage = 'qc';
+        status = 'pending';
+    }
+
     try {
+      print('DEBUG: Processing serial $serialNumber with stage: $stage, status: $status');
       final result = await updateDeviceStage(serialNumber, stage, status);
       return result;
     } catch (e) {

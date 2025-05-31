@@ -8,7 +8,9 @@ class ResultDialog extends StatelessWidget {
   final Map<String, String> details;
   final List<String> actions;
   final VoidCallback onClose;
-  final VoidCallback? onContinue;
+  final VoidCallback? onSubmit; // Callback riêng cho nút Xác nhận
+  final VoidCallback? onRetry; // Callback riêng cho nút Quét lại
+  final VoidCallback? onDashboard; // Callback riêng cho nút Quay về/Dashboard
   final bool isLoading;
 
   const ResultDialog({
@@ -19,7 +21,9 @@ class ResultDialog extends StatelessWidget {
     required this.details,
     required this.actions,
     required this.onClose,
-    this.onContinue,
+    this.onSubmit,
+    this.onRetry,
+    this.onDashboard,
     this.isLoading = false,
   });
 
@@ -158,13 +162,8 @@ class ResultDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildActions(BuildContext context, bool isSuccess, List<String> actions) {
-    print("DEBUG: Building actions with: $actions");
-
-    // Thêm log để kiểm tra xem các nút được render đúng không
-    for (var action in actions) {
-      print("DEBUG: Processing action: $action");
-    }
+  Widget _buildActions(BuildContext context, bool isSuccess, List<String> actionsList) {
+    print("DEBUG: Building actions with: $actionsList");
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -174,14 +173,13 @@ class ResultDialog extends StatelessWidget {
         ),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween, // Đảm bảo các nút cách đều
         children: [
-          if (actions.contains('retry'))
+          // Nút Quét lại (retry)
+          if (actionsList.contains('retry'))
             Expanded(
               child: TextButton(
-                onPressed: isLoading ? null : () {
-                  print("DEBUG: Retry button pressed explicitly");
-                  onClose?.call();
-                },
+                onPressed: isLoading ? null : onRetry ?? onClose,
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.grey[700],
                   padding: const EdgeInsets.symmetric(vertical: 12),
@@ -196,60 +194,54 @@ class ResultDialog extends StatelessWidget {
                 ),
               ),
             ),
-          if (actions.contains('retry'))
+          if (actionsList.contains('retry') && actionsList.contains('submit'))
             const SizedBox(width: 16),
-          if (actions.contains('submit'))
+
+          // Nút Xác nhận (submit)
+          if (actionsList.contains('submit'))
             Expanded(
               child: ElevatedButton(
-                onPressed: isLoading ? null : () {
-                  // Gọi callback với log chi tiết
-                  print("DEBUG: Submit button pressed explicitly");
-                  print("DEBUG: onContinue is null? ${onContinue == null}");
-                  if (onContinue != null) {
-                    onContinue!();
-                  }
-                },
+                onPressed: isLoading ? null : onSubmit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   disabledBackgroundColor: Colors.blue.withOpacity(0.6),
                 ),
                 child: isLoading
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle, size: 20),
+                          SizedBox(width: 8),
+                          Text('Xác nhận'),
+                        ],
                       ),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.check_circle, size: 20),
-                        SizedBox(width: 8),
-                        Text('Xác nhận'),
-                      ],
-                    ),
               ),
             )
-          else if (actions.contains('dashboard'))
+
+          // Nút Quay về (dashboard)
+          else if (actionsList.contains('dashboard'))
             Expanded(
               child: ElevatedButton(
-                onPressed: isLoading ? null : () {
-                  print("DEBUG: Dashboard button pressed explicitly");
-                  onContinue?.call();
-                },
+                onPressed: isLoading ? null : onDashboard,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isSuccess ? Colors.green : Colors.red,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.home, size: 20),
-                    const SizedBox(width: 8),
-                    const Text('Quay về'),
+                    SizedBox(width: 8),
+                    Text('Quay về'),
                   ],
                 ),
               ),
@@ -257,30 +249,6 @@ class ResultDialog extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Color _getButtonColor(bool isSuccess, List<String> actions) {
-    if (actions.contains('submit')) return Colors.blue;
-    if (actions.contains('dashboard')) {
-      return isSuccess ? Colors.green : Colors.red;
-    }
-    return Colors.blue;
-  }
-
-  Color _getLoadingColor(bool isSuccess, List<String> actions) {
-    return actions.contains('dashboard') && !isSuccess ? Colors.red[100]! : Colors.white;
-  }
-
-  IconData _getButtonIcon(List<String> actions) {
-    if (actions.contains('submit')) return Icons.check_circle;
-    if (actions.contains('dashboard')) return Icons.home;
-    return Icons.check;
-  }
-
-  String _getButtonText(List<String> actions) {
-    if (actions.contains('submit')) return 'Xác nhận';
-    if (actions.contains('dashboard')) return 'Quay về';
-    return 'Đồng ý';
   }
 
   void _copyToClipboard(BuildContext context, MapEntry<String, String> detail) {
