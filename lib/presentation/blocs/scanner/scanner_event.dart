@@ -10,11 +10,12 @@ abstract class ScannerEvent extends Equatable {
 class ScanQR extends ScannerEvent {
   final String purpose;
   final String data;
+  final Map<String, dynamic>? error;
 
-  const ScanQR(this.purpose, this.data);
+  const ScanQR(this.purpose, this.data, {this.error});
 
   @override
-  List<Object> get props => [purpose, data];
+  List<Object> get props => [purpose, data, error ?? {}];
 }
 
 class ResetScanner extends ScannerEvent {}

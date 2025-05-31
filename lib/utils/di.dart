@@ -5,6 +5,7 @@ import 'package:firmware_deployment_tool/data/services/scanner_service.dart';
 import 'package:firmware_deployment_tool/presentation/blocs/auth/auth_bloc.dart';
 import 'package:firmware_deployment_tool/presentation/blocs/dashboard/dashboard_bloc.dart';
 import 'package:firmware_deployment_tool/presentation/blocs/scanner/scanner_bloc.dart';
+import 'package:firmware_deployment_tool/presentation/blocs/theme/theme_bloc.dart';
 
 final getIt = GetIt.instance;
 
@@ -15,4 +16,5 @@ void setupDependencies() {
   getIt.registerSingleton<AuthBloc>(AuthBloc());
   getIt.registerSingleton<DashboardBloc>(DashboardBloc());
   getIt.registerSingleton<ScannerBloc>(ScannerBloc());
+  getIt.registerSingleton<ThemeBloc>(ThemeBloc());
 }

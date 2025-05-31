@@ -1,20 +1,59 @@
 import 'package:get_it/get_it.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 class ScannerService {
-  Future<bool> requestCameraPermission() async {
-    var status = await Permission.camera.request();
-    return status.isGranted;
+  final MobileScannerController controller = MobileScannerController();
+
+  Future<Map<String, dynamic>> requestCameraPermission() async {
+    var status = await Permission.camera.status;
+
+    if (status.isGranted) {
+      return {'success': true};
+    }
+
+    if (status.isDenied) {
+      status = await Permission.camera.request();
+      if (status.isGranted) {
+        return {'success': true};
+      }
+    }
+
+    if (status.isPermanentlyDenied) {
+      return {
+        'success': false,
+        'error': {
+          'title': 'Quyền camera bị từ chối',
+          'message': 'Vui lòng cấp quyền camera trong cài đặt thiết bị để sử dụng chức năng quét QR.',
+          'action': 'open_settings'
+        }
+      };
+    }
+
+    return {
+      'success': false,
+      'error': {
+        'title': 'Không thể truy cập camera',
+        'message': 'Quyền camera bị từ chối. Vui lòng thử lại.',
+        'action': 'retry'
+      }
+    };
   }
 
   Future<String?> scanQR() async {
-    // Simulated QR scan for demo
-    return 'DEV-2024-001';
+    final permissionResult = await requestCameraPermission();
+    if (!permissionResult['success']) {
+      return null;
+    }
+
+    return null;
+  }
+
+  void dispose() {
+    controller.dispose();
   }
 }
 
 final getIt = GetIt.instance;
 
-void setupDependencies() {
-  getIt.registerSingleton<ScannerService>(ScannerService());
-}
+

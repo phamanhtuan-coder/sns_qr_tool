@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firmware_deployment_tool/data/models/user.dart';
 import 'package:firmware_deployment_tool/presentation/blocs/dashboard/dashboard_bloc.dart';
-import 'package:firmware_deployment_tool/presentation/widgets/qr_scanner_screen.dart';
 
 class Dashboard extends StatelessWidget {
   final User user;
@@ -124,15 +123,6 @@ class Dashboard extends StatelessWidget {
                           return GestureDetector(
                             onTap: () {
                               context.read<DashboardBloc>().add(SelectFunction(func['id'] as String));
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => QRScannerScreen(
-                                    purpose: func['id'] as String,
-                                    onBack: () => Navigator.pop(context),
-                                  ),
-                                ),
-                              );
                             },
                             child: Container(
                               decoration: BoxDecoration(

@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firmware_deployment_tool/data/services/scanner_service.dart';
+import 'package:firmware_deployment_tool/utils/logger.dart';
 
 part 'scanner_event.dart';
 part 'scanner_state.dart';
@@ -10,19 +11,46 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
 
   ScannerBloc() : super(const ScannerInitial()) {
     on<ScanQR>((event, emit) async {
-      final success = event.data.isNotEmpty && (await _scannerService.requestCameraPermission());
-      if (success) {
-        final result = _getMockResult(event.purpose, event.data);
-        emit(ScannerSuccess(result: result));
-      } else {
+      try {
+        if (event.error != null) {
+          emit(ScannerFailure(error: event.error!));
+          return;
+        }
+
+        final permissionResult = await _scannerService.requestCameraPermission();
+        if (!permissionResult['success']) {
+          emit(ScannerFailure(error: permissionResult['error']));
+          return;
+        }
+
+        final result = await _scannerService.scanQR();
+        if (result != null) {
+          final mockResult = _getMockResult(event.purpose, result);
+          emit(ScannerSuccess(result: mockResult));
+        } else {
+          emit(const ScannerFailure(error: {
+            'title': 'Quét thất bại',
+            'message': 'Không thể đọc mã QR. Vui lòng thử lại.',
+            'details': {'errorCode': 'QR-001', 'reason': 'Invalid or damaged QR code'},
+          }));
+        }
+      } catch (e, stackTrace) {
+        logError('Lỗi xử lý sự kiện ScanQR', e, stackTrace);
         emit(const ScannerFailure(error: {
-          'title': 'Scan Failed',
-          'message': 'Unable to read QR code. Please try again.',
-          'details': {'errorCode': 'QR-001', 'reason': 'Invalid or damaged QR code'},
+          'title': 'Lỗi hệ thống',
+          'message': 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.',
+          'details': {'errorCode': 'SYS-001', 'reason': 'Unexpected error'},
         }));
       }
     });
-    on<ResetScanner>((event, emit) => emit(const ScannerInitial()));
+
+    on<ResetScanner>((event, emit) {
+      try {
+        emit(const ScannerInitial());
+      } catch (e, stackTrace) {
+        logError('Lỗi xử lý sự kiện ResetScanner', e, stackTrace);
+      }
+    });
   }
 
   Map<String, dynamic> _getMockResult(String purpose, String data) {
@@ -60,21 +88,21 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
       },
     };
     return {
-      'title': 'Scan Successful',
-      'message': 'Successfully scanned device for ${_getPurposeTitle(purpose).toLowerCase()}',
+      'title': 'Quét thành công',
+      'message': 'Đã quét thiết bị thành công cho ${_getPurposeTitle(purpose).toLowerCase()}',
       'details': mockData[purpose] ?? {},
     };
   }
 
   String _getPurposeTitle(String purpose) {
     const titles = {
-      'identify': 'Device Identification',
-      'firmware': 'Firmware Update',
-      'testing': 'Device Testing',
-      'packaging': 'Device Packaging',
-      'stockin': 'Stock In',
-      'stockout': 'Stock Out',
+      'identify': 'Xác định thiết bị',
+      'firmware': 'Cập nhật Firmware',
+      'testing': 'Kiểm tra thiết bị',
+      'packaging': 'Đóng gói thiết bị',
+      'stockin': 'Nhập kho',
+      'stockout': 'Xuất kho',
     };
-    return titles[purpose] ?? 'QR Code';
+    return titles[purpose] ?? 'Mã QR';
   }
 }

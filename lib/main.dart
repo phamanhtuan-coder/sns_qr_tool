@@ -1,8 +1,8 @@
-import 'package:firmware_deployment_tool/presentation/widgets/header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firmware_deployment_tool/presentation/blocs/auth/auth_bloc.dart';
 import 'package:firmware_deployment_tool/presentation/blocs/dashboard/dashboard_bloc.dart';
+import 'package:firmware_deployment_tool/presentation/blocs/theme/theme_bloc.dart';
 import 'package:firmware_deployment_tool/presentation/screens/main_app.dart';
 import 'package:firmware_deployment_tool/utils/di.dart';
 import 'package:firmware_deployment_tool/utils/theme.dart';
@@ -21,15 +21,15 @@ class MyApp extends StatelessWidget {
       providers: [
         BlocProvider(create: (_) => getIt<AuthBloc>()),
         BlocProvider(create: (_) => getIt<DashboardBloc>()),
-        BlocProvider(create: (_) => ThemeCubit()),
+        BlocProvider(create: (_) => getIt<ThemeBloc>()),
       ],
-      child: BlocBuilder<ThemeCubit, ThemeMode>(
-        builder: (context, themeMode) {
+      child: BlocBuilder<ThemeBloc, ThemeState>(
+        builder: (context, state) {
           return MaterialApp(
             title: 'Firmware Deployment Tool',
             theme: lightTheme,
             darkTheme: darkTheme,
-            themeMode: themeMode,
+            themeMode: state.themeMode,
             home: const MainApp(),
           );
         },
@@ -37,3 +37,4 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
