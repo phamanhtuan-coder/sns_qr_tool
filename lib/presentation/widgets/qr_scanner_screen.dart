@@ -168,7 +168,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     if (barcode == null || barcode.rawValue == null || barcode.rawValue!.isEmpty) {
       _controller.stop();
       _scannerBloc.add(ScanQR(widget.purpose, '', error: const {
-        'title': 'Quét th���t bại',
+        'title': 'Quét thất bại',
         'message': 'Không thể đọc mã QR. Vui lòng thử lại.',
         'details': {
           'errorCode': 'QR-002',
