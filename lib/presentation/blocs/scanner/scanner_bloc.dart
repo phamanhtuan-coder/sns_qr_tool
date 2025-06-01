@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import 'package:firmware_deployment_tool/data/services/scanner_service.dart';
 import 'package:firmware_deployment_tool/data/services/production_service.dart';
 import 'package:firmware_deployment_tool/data/services/camera_service.dart';
+import 'package:firmware_deployment_tool/data/services/bluetooth_client_service.dart'; // Added import
 import 'package:firmware_deployment_tool/utils/logger.dart';
 import 'package:firmware_deployment_tool/utils/di.dart';
 
@@ -13,7 +14,11 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
   final ScannerService _scannerService = getIt<ScannerService>();
   final ProductionService _productionService = getIt<ProductionService>();
   final CameraService _cameraService = getIt<CameraService>();
+  final BluetoothClientService _bluetoothService = getIt<BluetoothClientService>(); // Added service
   String _currentFunctionId = ''; // Store current function ID/purpose
+
+  // Add listener for Bluetooth connection status
+  Stream<ConnectionStatus> get connectionStatus => _bluetoothService.connectionStatus;
 
   ScannerBloc() : super(const ScannerInitial()) {
     on<ScanQR>((event, emit) async {
@@ -90,6 +95,12 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           return;
         }
 
+        // First, try to send data to desktop via Bluetooth/Socket
+        print("⚡ DEBUG: Attempting to send serial data to desktop");
+        bool sentToDesktop = await _bluetoothService.sendSerialToDesktop(event.serialNumber);
+        print("⚡ DEBUG: Sent to desktop result: $sentToDesktop");
+
+        // Whether desktop communication succeeded or not, still proceed with API call
         print("DEBUG: Calling processScannedSerial with serial: ${event.serialNumber}, functionId: ${event.functionId}");
         final result = await _productionService.processScannedSerial(
           event.serialNumber,
@@ -101,11 +112,14 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           print("DEBUG: API call successful, emitting success state");
           emit(ScannerSuccess(result: {
             'title': 'Thành công',
-            'message': 'Đã cập nhật thông tin thiết bị thành công',
+            'message': sentToDesktop
+              ? 'Đã cập nhật thông tin thiết bị và gửi dữ liệu tới máy tính thành công'
+              : 'Đã cập nhật thông tin thiết bị thành công (Không gửi được tới PC)',
             'details': {
               'device_serial': event.serialNumber,
               'stage': result['data']?['stage'] ?? 'Unknown',
-              'status': result['data']?['status'] ?? 'Unknown'
+              'status': result['data']?['status'] ?? 'Unknown',
+              'sent_to_desktop': sentToDesktop ? 'Thành công' : 'Thất bại'
             },
             'actions': const ['retry', 'dashboard'],
           }));
@@ -118,6 +132,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
               'errorCode': result['errorCode'] ?? 'API-001',
               'reason': result['message'] ?? 'Unknown error',
               'device_serial': event.serialNumber,
+              'sent_to_desktop': sentToDesktop ? 'Thành công' : 'Thất bại'
             },
             'actions': const ['retry', 'dashboard'],
           }));
@@ -158,8 +173,8 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
 
   @override
   Future<void> close() {
+    _bluetoothService.dispose(); // Also dispose bluetooth service
     _cameraService.dispose();
     return super.close();
   }
 }
-

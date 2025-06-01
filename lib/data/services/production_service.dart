@@ -20,8 +20,10 @@ class ProductionService {
 
       return result;
     } catch (e) {
+      print('DEBUG: Error in updateDeviceStage: $e');
       return {
         'success': false,
+        'errorCode': 'UPDATE_ERROR',
         'message': 'Failed to update device stage: ${e.toString()}',
       };
     }
@@ -35,6 +37,7 @@ class ProductionService {
       return {
         'success': false,
         'message': 'Serial number cannot be empty',
+        'errorCode': 'SERIAL_001',
       };
     }
 
@@ -43,6 +46,7 @@ class ProductionService {
       return {
         'success': false,
         'message': 'Tính năng đang phát triển',
+        'errorCode': 'FEATURE_001',
         'isFeatureInDevelopment': true,
       };
     }
@@ -77,10 +81,20 @@ class ProductionService {
     try {
       print('DEBUG: Processing serial $serialNumber with stage: $stage, status: $status');
       final result = await updateDeviceStage(serialNumber, stage, status);
+
+      // Ensure consistent response format
+      if (!result.containsKey('success')) {
+        result['success'] = false;
+        result['errorCode'] = 'API_001';
+        result['message'] = 'Unexpected API response format';
+      }
+
       return result;
     } catch (e) {
+      print('DEBUG: Error in processScannedSerial: $e');
       return {
         'success': false,
+        'errorCode': 'API_002',
         'message': 'Error processing serial number: ${e.toString()}',
       };
     }

@@ -6,8 +6,14 @@ import 'package:firmware_deployment_tool/presentation/blocs/theme/theme_bloc.dar
 import 'package:firmware_deployment_tool/presentation/screens/main_app.dart';
 import 'package:firmware_deployment_tool/utils/di.dart';
 import 'package:firmware_deployment_tool/utils/theme.dart';
+import 'package:firmware_deployment_tool/data/services/api_client.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize API client with correct base URL before setting up dependencies
+  await ApiClient.initializeBaseUrl();
+
   setupDependencies();
   runApp(const MyApp());
 }
