@@ -28,14 +28,14 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
 
         if (event.error != null) {
           emit(ScannerFailure(error: event.error!));
-          await _cameraService.stop();
+          // Don't stop the camera here, let the UI control camera state
           return;
         }
 
         final permissionResult = await _scannerService.requestCameraPermission();
         if (!permissionResult['success']) {
           emit(ScannerFailure(error: permissionResult['error']));
-          await _cameraService.stop();
+          // Don't stop the camera here, let the UI control camera state
           return;
         }
 
@@ -46,13 +46,13 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
             'details': {'errorCode': 'QR-001', 'reason': 'Empty QR data'},
             'actions': ['retry', 'dashboard'],
           }));
-          await _cameraService.stop();
+          // Don't stop the camera here, let the UI control camera state
           return;
         }
 
         // For identify purpose, we expect a simple serial string
         if (event.purpose == 'identify') {
-          await _cameraService.stop();
+          // Don't stop the camera here, let the UI control camera state
           emit(ScannerSuccess(result: {
             'title': 'Quét thành công',
             'message': 'Đã quét thiết bị thành công',
@@ -63,7 +63,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
         }
 
         // Handle other purposes
-        await _cameraService.stop();
+        // Don't stop the camera here, let the UI control camera state
         emit(ScannerSuccess(result: {
           'title': 'Quét thành công',
           'message': 'Đã quét thiết bị thành công',
@@ -73,7 +73,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
       } catch (e, stackTrace) {
         print("DEBUG: Exception in SubmitScan handler: $e");
         logError('Lỗi xử lý sự kiện ScanQR', e, stackTrace);
-        await _cameraService.stop();
+        // Don't stop the camera here, let the UI control camera state
         emit(ScannerFailure(error: {
           'title': 'Lỗi hệ thống',
           'message': 'Đã xảy ra lỗi khi xử lý quét mã QR.',

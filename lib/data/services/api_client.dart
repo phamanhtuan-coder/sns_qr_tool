@@ -5,15 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  // Base URL options - The active one is set at runtime
-  static const String _localEmulatorUrl = 'http://10.0.2.2:3000/api'; // Android emulator localhost
-  static const String _ngrokUrl = 'https://4fa5-171-250-162-57.ngrok-free.app/api'; // Public tunnel URL without trailing space
-
-  // Direct IP for physical device testing - update this with your actual computer's IP on the same network
-  // For example: static const String _directIpUrl = 'http://192.168.1.5:3000/api';
-  static const String _directIpUrl = 'http://192.168.1.7:3000/api'; // Updated to the actual server IP
-
-  // Initialize with the ngrok URL for better connectivity
+  // Base URL - Only using ngrok
+  static const String _ngrokUrl = 'https://c3e7-171-250-162-57.ngrok-free.app/api';
   static String _baseUrl = _ngrokUrl;
 
   static String get baseUrl => _baseUrl;
@@ -33,93 +26,11 @@ class ApiClient {
       : _client = client ?? http.Client(),
         _timeout = timeout ?? const Duration(seconds: 30);
 
-  // Initialize the API client with the best available URL
+  // Initialize the API client - Now only using ngrok URL
   static Future<void> initializeBaseUrl() async {
-    // Try loading saved preference first with error handling
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedUrl = prefs.getString('api_base_url');
-      if (savedUrl != null && savedUrl.isNotEmpty) {
-        _baseUrl = savedUrl;
-        print('DEBUG: Using saved API URL: $_baseUrl');
-        return;
-      }
-    } catch (e) {
-      print('DEBUG: Error loading SharedPreferences: $e - continuing with default URL');
-    }
-
-    // If no saved preference, try auto-detection with timeout protection
-    try {
-      // Use a timeout to prevent hanging if network operations are slow
-      await Future.delayed(const Duration(seconds: 0)).timeout(const Duration(seconds: 2), onTimeout: () async {
-        throw TimeoutException('Network detection timed out');
-      }).then((_) async {
-        final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
-        print('DEBUG: Found ${interfaces.length} network interfaces');
-
-        // First try: Check for a direct connection to the server
-        try {
-          // Socket.connect with a timeout
-          final socket = await Future.any([
-            Socket.connect('192.168.1.7', 3000),
-            Future.delayed(const Duration(milliseconds: 800))
-                .then((_) => throw TimeoutException('Connection timed out'))
-          ]);
-
-          socket.destroy();
-          _baseUrl = _directIpUrl;
-          print('DEBUG: Direct connection successful to: $_baseUrl');
-          return;
-        } catch (e) {
-          print('DEBUG: Direct connection failed, trying network scan: $e');
-        }
-
-        // Second try: Scan network interfaces
-        for (var interface in interfaces) {
-          if (!interface.name.contains('lo') && interface.addresses.isNotEmpty) {
-            print('DEBUG: Checking interface: ${interface.name}');
-            for (var addr in interface.addresses) {
-              final ip = addr.address;
-              final ipParts = ip.split('.');
-              if (ipParts.length == 4) {
-                final baseNetwork = '${ipParts[0]}.${ipParts[1]}.${ipParts[2]}';
-
-                // Try common server IPs in the detected subnet
-                for (var lastOctet in [100, 1, 2, 5, 10]) {
-                  final testIp = '$baseNetwork.$lastOctet';
-                  try {
-                    print('DEBUG: Testing connection to $testIp:3000');
-
-                    // Socket.connect with a timeout
-                    final socket = await Future.any([
-                      Socket.connect(testIp, 3000),
-                      Future.delayed(const Duration(milliseconds: 500))
-                          .then((_) => throw TimeoutException('Connection timed out'))
-                    ]);
-
-                    socket.destroy();
-                    _baseUrl = 'http://$testIp:3000/api';
-                    print('DEBUG: Found working server at: $_baseUrl');
-                    return;
-                  } catch (e) {
-                    // Continue with next IP
-                  }
-                }
-              }
-            }
-          }
-        }
-      });
-    } catch (e) {
-      print('DEBUG: Error or timeout during network detection: $e');
-    }
-
-    // If direct connection and auto-detection both failed, use the ngrok tunnel
-    if (!_baseUrl.startsWith('http')) {
-      _baseUrl = _ngrokUrl;
-    }
-
-    print('DEBUG: Final API URL: $_baseUrl');
+    // Always use ngrok URL
+    _baseUrl = _ngrokUrl;
+    print('DEBUG: Using ngrok API URL: $_baseUrl');
 
     // Try to save the setting for next time
     try {

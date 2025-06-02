@@ -31,6 +31,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   late final ScannerBloc _scannerBloc;
   late final CameraService _cameraService;
   StreamSubscription<String>? _cameraErrorSubscription;
+  Timer? _scanTimeoutTimer;
 
   @override
   void initState() {
@@ -67,14 +68,13 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
   Future<void> _retryScanning() async {
     print("DEBUG: Attempting camera restart for retry");
-    setState(() => _isScanning = false);
-
-    await _controller.stop(); // <-- Đảm bảo dừng scanner
-    await _controller.start(); // <-- Sau đó khởi động lại
 
     if (mounted) {
+      // Don't stop the camera, just reset the scanning state
       setState(() {
         _isScanning = true;
+        // Cancel existing timer if any
+        _scanTimeoutTimer?.cancel();
         _startScanTimeout();
       });
       _scannerBloc.add(ResetScanner());
@@ -101,7 +101,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         _scannerBloc.add(ScanQR(widget.purpose, '', error: const {
           'title': 'Thiết bị không hỗ trợ',
           'message': 'Thiết bị này không hỗ trợ quét QR. Vui lòng sử dụng thiết bị khác.',
-          'details': {'errorCode': 'DEVICE-001', 'reason': 'No camera support'},
+          'details': {'errorCode': 'DEVICE-001', 'reason': 'No camera support', 'actions': ['dashboard']},
         }));
         setState(() => _isScanning = false);
       }
@@ -110,24 +110,28 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       _scannerBloc.add(ScanQR(widget.purpose, '', error: {
         'title': 'Lỗi thiết bị',
         'message': 'Không thể kiểm tra hỗ trợ thiết bị. Vui lòng thử lại.',
-        'details': {'errorCode': 'DEVICE-002', 'reason': e.toString()},
+        'details': {'errorCode': 'DEVICE-002', 'reason': e.toString(), 'actions': const ['dashboard']},
       }));
       setState(() => _isScanning = false);
     }
   }
 
   void _startScanTimeout() {
-    Future.delayed(const Duration(seconds: 10), () {
+    // Cancel existing timer if any
+    _scanTimeoutTimer?.cancel();
+
+    // Set a longer timeout (45 seconds)
+    _scanTimeoutTimer = Timer(const Duration(seconds: 45), () {
       if (mounted && _isScanning) {
         setState(() => _isScanning = false);
-        _controller.stop();
+        // Don't stop the camera, just stop the scanning process
         _scannerBloc.add(ScanQR(widget.purpose, '', error: const {
           'title': 'Hết thời gian quét',
-          'message': 'Không tìm thấy mã QR trong 10 giây. Vui lòng thử lại.',
+          'message': 'Không tìm thấy mã QR trong 45 giây. Vui lòng thử lại.',
           'details': {
             'errorCode': 'QR-003',
             'reason': 'Timeout',
-            'actions': ['retry']
+            'actions': ['retry', 'dashboard']
           },
         }));
       }
@@ -148,35 +152,35 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   }
 
   void _safePop() {
+    // Cancel any active timer
+    _scanTimeoutTimer?.cancel();
+
+    // Make sure controller is stopped on navigation
+    _controller.stop();
+
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
-      widget.onBack(); // Reset DashboardBloc state
     }
+    widget.onBack(); // Reset DashboardBloc state
   }
 
   void _handleDetection(BarcodeCapture capture) {
-    if (!_isScanning) return;
+    if (!_isScanning) return;  // Ignore detections when not in scanning mode
 
     final barcode = capture.barcodes.firstOrNull;
 
-    if (_isScanning) {
-      setState(() => _isScanning = false);
-      _controller.stop(); // gọi đúng 1 lần
-      _scannerBloc.add(ScanQR(widget.purpose, barcode!.rawValue!));
-    }
-
     if (barcode == null || barcode.rawValue == null || barcode.rawValue!.isEmpty) {
-      _controller.stop();
       _scannerBloc.add(ScanQR(widget.purpose, '', error: const {
         'title': 'Quét thất bại',
         'message': 'Không thể đọc mã QR. Vui lòng thử lại.',
         'details': {
           'errorCode': 'QR-002',
           'reason': 'Invalid or empty QR code',
-          'actions': ['retry']
+          'actions': ['retry', 'dashboard']
         },
       }));
-      // Sử dụng addPostFrameCallback để tránh setState trong build
+
+      // Don't stop the camera, just stop the scanning process
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() => _isScanning = false);
@@ -185,30 +189,33 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       return;
     }
 
-    _controller.stop();
-    // Sử dụng addPostFrameCallback để tránh setState trong build
+    // Cancel timeout timer since we detected a valid QR code
+    _scanTimeoutTimer?.cancel();
+
+    // Don't stop the camera, just stop the scanning process
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         setState(() => _isScanning = false);
       }
     });
+
     _scannerBloc.add(ScanQR(widget.purpose, barcode.rawValue!));
   }
 
   void _handleError(MobileScannerException error) {
     if (!_isScanning) return;
 
-    _controller.stop();
     _scannerBloc.add(ScanQR(widget.purpose, '', error: {
       'title': 'Lỗi camera',
       'message': 'Không thể truy cập camera. Vui lòng kiểm tra thiết bị.',
       'details': {
         'errorCode': 'CAM-001',
         'reason': error.toString(),
-        'actions': const ['dashboard']
+        'actions': const ['retry', 'dashboard']
       },
     }));
-    // Sử dụng addPostFrameCallback để tránh setState trong build
+
+    // Don't stop the camera, just stop the scanning process
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         setState(() => _isScanning = false);
@@ -218,6 +225,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
   @override
   void dispose() {
+    _scanTimeoutTimer?.cancel();
     _controller.stop();
     _controller.dispose();
     _isScanning = false;
@@ -317,12 +325,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                           }
                         : null,
                     onClose: () {
-                      print("DEBUG: Dialog closed");
-                      if (actions.contains('dashboard')) {
-                        _safePop();
-                      } else {
-                        _retryScanning();
-                      }
+                      print("DEBUG: Dialog close button pressed - restarting scanner");
+                      // When dialog is dismissed, restart scanning like retry button
+                      _retryScanning();
                     },
                   );
                 } else if (state is ScannerFailure) {
@@ -358,12 +363,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                           }
                         : null,
                     onClose: () {
-                      print("DEBUG: Dialog closed");
-                      if (actions.contains('dashboard')) {
-                        _safePop();
-                      } else {
-                        _retryScanning();
-                      }
+                      print("DEBUG: Dialog close button pressed - restarting scanner");
+                      // When dialog is dismissed, restart scanning like retry button
+                      _retryScanning();
                     },
                   );
                 }
