@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:smart_net_qr_scanner/utils/app_colors.dart';
+import 'package:provider/provider.dart';
+import 'package:smart_net_qr_scanner/utils/theme_provider.dart';
 
 class LoginPage extends StatefulWidget {
   final Function({required String username, required String password, required bool remember}) onLogin;
@@ -54,20 +57,41 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
     final primaryColor = Theme.of(context).primaryColor;
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: IconButton(
+              icon: Icon(
+                isDarkMode ? Icons.light_mode : Icons.dark_mode,
+                color: Colors.white,
+              ),
+              onPressed: () {
+                themeProvider.toggleTheme();
+              },
+              tooltip: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+            ),
+          ),
+        ],
+      ),
+      extendBodyBehindAppBar: true,
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              primaryColor,
+              isDarkMode ? AppColors.darkHeaderBackground : AppColors.primary,
               isDarkMode
-                ? primaryColor.withOpacity(0.7)
-                : HSLColor.fromColor(primaryColor).withLightness(0.8).toColor(),
+                ? AppColors.darkBackground.withOpacity(0.8)
+                : AppColors.accent.withOpacity(0.8),
             ],
           ),
         ),
@@ -152,6 +176,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           offset: Offset(0, _slideAnimation.value * 0.4),
                           child: Card(
                             elevation: 8,
+                            color: isDarkMode ? AppColors.darkCardBackground : AppColors.cardBackground,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
@@ -165,21 +190,21 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                                       margin: const EdgeInsets.only(bottom: 20),
                                       decoration: BoxDecoration(
-                                        color: Colors.red.withOpacity(0.1),
+                                        color: AppColors.error.withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: Colors.red.withOpacity(0.3),
+                                          color: AppColors.error.withOpacity(0.3),
                                         ),
                                       ),
                                       child: Row(
                                         children: [
-                                          Icon(Icons.error_outline, size: 20, color: Colors.red.shade700),
+                                          Icon(Icons.error_outline, size: 20, color: AppColors.error),
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: Text(
                                               _error!,
                                               style: TextStyle(
-                                                color: Colors.red.shade700,
+                                                color: AppColors.error,
                                                 fontWeight: FontWeight.w500,
                                               ),
                                             ),
@@ -206,19 +231,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                       prefixIcon: Icon(Icons.person_outline, color: primaryColor),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
                                       ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide(color: primaryColor, width: 2),
-                                      ),
-                                      floatingLabelStyle: TextStyle(color: primaryColor),
                                       filled: true,
-                                      fillColor: isDarkMode ? Colors.grey.shade800.withOpacity(0.3) : Colors.grey.shade50,
+                                      fillColor: isDarkMode ? AppColors.darkSurface : Colors.white.withOpacity(0.9),
                                     ),
                                   ),
                                   const SizedBox(height: 20),
@@ -243,19 +258,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                       ),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
                                       ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide(color: primaryColor, width: 2),
-                                      ),
-                                      floatingLabelStyle: TextStyle(color: primaryColor),
                                       filled: true,
-                                      fillColor: isDarkMode ? Colors.grey.shade800.withOpacity(0.3) : Colors.grey.shade50,
+                                      fillColor: isDarkMode ? AppColors.darkSurface : Colors.white.withOpacity(0.9),
                                     ),
                                   ),
                                   const SizedBox(height: 16),
@@ -281,7 +286,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                         'Ghi nhớ đăng nhập',
                                         style: TextStyle(
                                           fontSize: 14,
-                                          color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                                          color: isDarkMode ? AppColors.darkTextSecondary : AppColors.textSecondary,
                                         ),
                                       ),
                                     ],
