@@ -95,12 +95,19 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           return;
         }
 
-        // First, try to send data to desktop via Bluetooth/Socket
-        print("⚡ DEBUG: Attempting to send serial data to desktop");
-        bool sentToDesktop = await _bluetoothService.sendSerialToDesktop(event.serialNumber);
-        print("⚡ DEBUG: Sent to desktop result: $sentToDesktop");
+        bool sentToDesktop = false;
 
-        // Whether desktop communication succeeded or not, still proceed with API call
+        // Only send data via Bluetooth for firmware mode
+        if (event.functionId == 'firmware') {
+          // Try to send data to desktop via Bluetooth/Socket
+          print("⚡ DEBUG: Firmware mode - attempting to send serial data to desktop");
+          sentToDesktop = await _bluetoothService.sendSerialToDesktop(event.serialNumber);
+          print("⚡ DEBUG: Sent to desktop result: $sentToDesktop");
+        } else {
+          print("⚡ DEBUG: Non-firmware mode - skipping Bluetooth communication");
+        }
+
+        // Always call the API for all modes
         print("DEBUG: Calling processScannedSerial with serial: ${event.serialNumber}, functionId: ${event.functionId}");
         final result = await _productionService.processScannedSerial(
           event.serialNumber,
@@ -112,14 +119,16 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           print("DEBUG: API call successful, emitting success state");
           emit(ScannerSuccess(result: {
             'title': 'Thành công',
-            'message': sentToDesktop
-              ? 'Đã cập nhật thông tin thiết bị và gửi dữ liệu tới máy tính thành công'
-              : 'Đã cập nhật thông tin thiết bị thành công (Không gửi được tới PC)',
+            'message': event.functionId == 'firmware'
+              ? (sentToDesktop
+                  ? 'Đã cập nhật thông tin thiết bị và gửi dữ liệu tới máy tính thành công'
+                  : 'Đã cập nhật thông tin thiết bị thành công (Không gửi được tới PC)')
+              : 'Đã cập nhật thông tin thiết bị thành công',
             'details': {
               'device_serial': event.serialNumber,
               'stage': result['data']?['stage'] ?? 'Unknown',
               'status': result['data']?['status'] ?? 'Unknown',
-              'sent_to_desktop': sentToDesktop ? 'Thành công' : 'Thất bại'
+              'sent_to_desktop': event.functionId == 'firmware' ? (sentToDesktop ? 'Thành công' : 'Thất bại') : 'N/A'
             },
             'actions': const ['retry', 'dashboard'],
           }));
@@ -132,7 +141,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
               'errorCode': result['errorCode'] ?? 'API-001',
               'reason': result['message'] ?? 'Unknown error',
               'device_serial': event.serialNumber,
-              'sent_to_desktop': sentToDesktop ? 'Thành công' : 'Thất bại'
+              'sent_to_desktop': event.functionId == 'firmware' ? (sentToDesktop ? 'Thành công' : 'Thất bại') : 'N/A'
             },
             'actions': const ['retry', 'dashboard'],
           }));

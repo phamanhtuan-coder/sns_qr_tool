@@ -173,13 +173,14 @@ class ResultDialog extends StatelessWidget {
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween, // Đảm bảo các nút cách đều
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Nút Quét lại (retry)
           if (actionsList.contains('retry'))
             Expanded(
               child: TextButton(
-                onPressed: isLoading ? null : onRetry ?? onClose,
+                // Always enable the retry button regardless of loading state
+                onPressed: onRetry ?? onClose,
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.grey[700],
                   padding: const EdgeInsets.symmetric(vertical: 12),
@@ -194,7 +195,10 @@ class ResultDialog extends StatelessWidget {
                 ),
               ),
             ),
-          if (actionsList.contains('retry') && actionsList.contains('submit'))
+
+          // Add a spacer between buttons if both retry and another button exist
+          if ((actionsList.contains('retry') && actionsList.contains('submit')) ||
+              (actionsList.contains('retry') && actionsList.contains('dashboard')))
             const SizedBox(width: 16),
 
           // Nút Xác nhận (submit)
@@ -225,13 +229,18 @@ class ResultDialog extends StatelessWidget {
                         ],
                       ),
               ),
-            )
+            ),
 
-          // Nút Quay về (dashboard)
-          else if (actionsList.contains('dashboard'))
+          // Add a spacer between submit and dashboard if both exist
+          if (actionsList.contains('submit') && actionsList.contains('dashboard'))
+            const SizedBox(width: 16),
+
+          // Nút Quay về (dashboard) - now in a separate if condition, not an else if
+          if (actionsList.contains('dashboard'))
             Expanded(
               child: ElevatedButton(
-                onPressed: isLoading ? null : onDashboard,
+                // Always enable the dashboard button regardless of loading state
+                onPressed: onDashboard,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isSuccess ? Colors.green : Colors.red,
                   padding: const EdgeInsets.symmetric(vertical: 12),
