@@ -166,13 +166,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     // First call the onBack callback to reset DashboardBloc state
     widget.onBack();
 
-    // Then use Navigator to pop if possible
-    if (Navigator.canPop(context)) {
-      print("DEBUG: Popping navigator");
-      Navigator.pop(context);
-    } else {
-      print("DEBUG: Can't pop navigator, using onBack callback only");
-    }
+    // Now pop the navigation stack to go back to the dashboard
+    Navigator.of(context).pop();
   }
 
   void _handleDetection(BarcodeCapture capture) {
@@ -300,7 +295,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                     ),
                   ),
                   child: Text(
-                    _isScanning ? 'Đặt mã QR vào khung để quét' : 'Quét tạm dừng. Nhấn "Thử lại" đ�� tiếp tục.',
+                    _isScanning ? 'Đặt mã QR vào khung để quét' : 'Quét tạm dừng. Nhấn "Thử lại" để tiếp tục.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white, fontSize: 14),
                   ),

@@ -5,6 +5,7 @@ import 'package:smart_net_qr_scanner/presentation/screens/splash_screen.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/dashboard.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/qr_scanner_screen.dart';
 import 'package:smart_net_qr_scanner/data/models/user.dart';
+import 'package:smart_net_qr_scanner/presentation/widgets/login_page.dart';
 
 class MainApp extends StatefulWidget {
   const MainApp({super.key});
@@ -15,6 +16,14 @@ class MainApp extends StatefulWidget {
 
 class _MainAppState extends State<MainApp> {
   bool _showingSplash = true;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  // Create a dummy user
+  static const dummyUser = User(
+    name: 'Người dùng',
+    role: 'Kỹ thuật viên',
+    department: 'Sản xuất'
+  );
 
   @override
   void initState() {
@@ -36,24 +45,52 @@ class _MainAppState extends State<MainApp> {
       return const SplashScreen();
     }
 
-    // After splash is done, go directly to dashboard (skip authentication)
-    // Create a dummy user since we don't have authentication
-    const dummyUser = User(
-      name: 'Người dùng',
-      role: 'Kỹ thuật viên',
-      department: 'Sản xuất'
-    );
-
-    return BlocBuilder<DashboardBloc, DashboardState>(
-      builder: (context, dashboardState) {
-        if (dashboardState.selectedFunction != null && dashboardState.selectedFunction!.isNotEmpty) {
-          return QRScannerScreen(
-            purpose: dashboardState.selectedFunction!,
-            onBack: () => context.read<DashboardBloc>().add(const SelectFunction("")),
-          );
-        }
-        return Dashboard(user: dummyUser);
-      },
+    return BlocProvider(
+      create: (context) => DashboardBloc(),
+      child: MaterialApp(
+        navigatorKey: _navigatorKey,
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+        ),
+        initialRoute: '/login',
+        routes: {
+          '/login': (context) => LoginPage(
+            onLogin: ({required String username, required String password, required bool remember}) {
+              // Change from pushReplacementNamed to pushNamed to keep login in the stack
+              _navigatorKey.currentState?.pushNamed('/dashboard');
+            },
+          ),
+          '/dashboard': (context) => BlocListener<DashboardBloc, DashboardState>(
+            listener: (context, state) {
+              if (state.selectedFunction != null && state.selectedFunction!.isNotEmpty) {
+                _navigatorKey.currentState?.pushNamed(
+                  '/scanner',
+                  arguments: state.selectedFunction,
+                );
+              }
+            },
+            child: Dashboard(user: dummyUser),
+          ),
+        },
+        onGenerateRoute: (settings) {
+          if (settings.name == '/scanner') {
+            final purpose = settings.arguments as String;
+            return MaterialPageRoute(
+              builder: (context) => QRScannerScreen(
+                purpose: purpose,
+                onBack: () {
+                  // Just reset the function selection
+                  context.read<DashboardBloc>().add(const SelectFunction(""));
+                  // Navigation will be handled by the Navigator's pop
+                },
+              ),
+            );
+          }
+          return null;
+        },
+      ),
     );
   }
 }
