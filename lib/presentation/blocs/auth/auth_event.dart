@@ -17,3 +17,11 @@ class LoginEvent extends AuthEvent {
   @override
   List<Object> get props => [username, password, remember];
 }
+
+class CheckLoginStatus extends AuthEvent {
+  const CheckLoginStatus();
+}
+
+class LogoutEvent extends AuthEvent {
+  const LogoutEvent();
+}

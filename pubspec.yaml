@@ -1,5 +1,5 @@
 name: smart_net_qr_scanner
-description: A Flutter app for firmware deployment with QR scanning
+description: A Flutter app for QR scanning
 version: 1.0.0
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -20,6 +20,17 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+  flutter_launcher_icons: ^0.13.1
 flutter:
   uses-material-design: true
+  assets:
+    - assets/app_icon.png
 
+# App icon configuration
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon.png"
+  adaptive_icon_background: "#FFFFFF" # Background color for adaptive icons
+  adaptive_icon_foreground: "assets/app_icon.png"
+  min_sdk_android: 21
