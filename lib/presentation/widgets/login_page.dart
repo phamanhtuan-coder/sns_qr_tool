@@ -203,7 +203,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                           Expanded(
                                             child: Text(
                                               _error!,
-                                              style: TextStyle(
+                                              style: const TextStyle(
                                                 color: AppColors.error,
                                                 fontWeight: FontWeight.w500,
                                               ),
@@ -263,35 +263,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                       fillColor: isDarkMode ? AppColors.darkSurface : Colors.white.withOpacity(0.9),
                                     ),
                                   ),
-                                  const SizedBox(height: 16),
-                                  // Remember Me checkbox
-                                  Row(
-                                    children: [
-                                      SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: Checkbox(
-                                          value: _remember,
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _remember = value ?? false;
-                                            });
-                                          },
-                                          activeColor: primaryColor,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Ghi nhớ đăng nhập',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: isDarkMode ? AppColors.darkTextSecondary : AppColors.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 24),
+                                  const SizedBox(height: 40),
                                   // Login Button
                                   SizedBox(
                                     width: double.infinity,
@@ -337,7 +309,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                         Transform.translate(
                           offset: Offset(0, _slideAnimation.value * 0.2),
                           child: Text(
-                            'Phiên bản 1.0',
+                            'Phiên bản 1.0.0',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.7),
                               fontSize: 12,
