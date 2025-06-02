@@ -1,11 +1,11 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:firmware_deployment_tool/data/services/scanner_service.dart';
-import 'package:firmware_deployment_tool/data/services/production_service.dart';
-import 'package:firmware_deployment_tool/data/services/camera_service.dart';
-import 'package:firmware_deployment_tool/data/services/bluetooth_client_service.dart'; // Added import
-import 'package:firmware_deployment_tool/utils/logger.dart';
-import 'package:firmware_deployment_tool/utils/di.dart';
+import 'package:smart_net_qr_scanner/data/services/scanner_service.dart';
+import 'package:smart_net_qr_scanner/data/services/production_service.dart';
+import 'package:smart_net_qr_scanner/data/services/camera_service.dart';
+import 'package:smart_net_qr_scanner/data/services/bluetooth_client_service.dart'; // Added import
+import 'package:smart_net_qr_scanner/utils/logger.dart';
+import 'package:smart_net_qr_scanner/utils/di.dart';
 
 part 'scanner_event.dart';
 part 'scanner_state.dart';

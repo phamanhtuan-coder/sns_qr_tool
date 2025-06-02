@@ -1,9 +1,9 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:firmware_deployment_tool/data/models/user.dart';
-import 'package:firmware_deployment_tool/data/services/auth_service.dart';
-import 'package:firmware_deployment_tool/utils/logger.dart';
-import 'package:firmware_deployment_tool/utils/di.dart';
+import 'package:smart_net_qr_scanner/data/models/user.dart';
+import 'package:smart_net_qr_scanner/data/services/auth_service.dart';
+import 'package:smart_net_qr_scanner/utils/logger.dart';
+import 'package:smart_net_qr_scanner/utils/di.dart';
 
 part 'auth_event.dart';
 part 'auth_state.dart';

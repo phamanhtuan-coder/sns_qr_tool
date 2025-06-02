@@ -1,6 +1,6 @@
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'dart:async';
-import 'package:firmware_deployment_tool/utils/logger.dart';
+import 'package:smart_net_qr_scanner/utils/logger.dart';
 
 class CameraService {
   MobileScannerController? _controller;

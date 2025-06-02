@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firmware_deployment_tool/data/models/device.dart';
+import 'package:smart_net_qr_scanner/data/models/device.dart';
 
 class ErrorDialog extends StatefulWidget {
   final Device device;

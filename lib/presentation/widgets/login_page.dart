@@ -50,7 +50,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Firmware Deployment Tool',
+                  'SmartNet QR Scanner',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 8),
@@ -105,21 +105,6 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Checkbox(
-                                  value: _remember,
-                                  onChanged: (value) => setState(() => _remember = value!),
-                                ),
-                                const Text('Ghi nhớ đăng nhập', style: TextStyle(fontSize: 14)),
-                              ],
-                            ),
-                          ],
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton(

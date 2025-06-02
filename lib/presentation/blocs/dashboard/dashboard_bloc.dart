@@ -1,6 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:firmware_deployment_tool/utils/logger.dart';
+import 'package:smart_net_qr_scanner/utils/logger.dart';
 
 part 'dashboard_event.dart';
 part 'dashboard_state.dart';

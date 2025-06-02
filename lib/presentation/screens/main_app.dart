@@ -1,12 +1,12 @@
-import 'package:firmware_deployment_tool/presentation/widgets/login_page.dart';
+import 'package:smart_net_qr_scanner/presentation/widgets/login_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:firmware_deployment_tool/presentation/blocs/auth/auth_bloc.dart';
-import 'package:firmware_deployment_tool/presentation/blocs/dashboard/dashboard_bloc.dart';
-import 'package:firmware_deployment_tool/presentation/widgets/mobile_login_page.dart';
-import 'package:firmware_deployment_tool/presentation/widgets/dashboard.dart';
-import 'package:firmware_deployment_tool/presentation/widgets/qr_scanner_screen.dart';
-import 'package:firmware_deployment_tool/data/models/user.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/dashboard/dashboard_bloc.dart';
+import 'package:smart_net_qr_scanner/presentation/widgets/mobile_login_page.dart';
+import 'package:smart_net_qr_scanner/presentation/widgets/dashboard.dart';
+import 'package:smart_net_qr_scanner/presentation/widgets/qr_scanner_screen.dart';
+import 'package:smart_net_qr_scanner/data/models/user.dart';
 
 class MainApp extends StatelessWidget {
   const MainApp({super.key});

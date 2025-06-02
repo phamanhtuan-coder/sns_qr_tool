@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:firmware_deployment_tool/data/services/camera_service.dart';
+import 'package:smart_net_qr_scanner/data/services/camera_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:firmware_deployment_tool/presentation/blocs/scanner/scanner_bloc.dart';
-import 'package:firmware_deployment_tool/presentation/widgets/qr_overlay.dart';
-import 'package:firmware_deployment_tool/presentation/widgets/result_dialog.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/scanner/scanner_bloc.dart';
+import 'package:smart_net_qr_scanner/presentation/widgets/qr_overlay.dart';
+import 'package:smart_net_qr_scanner/presentation/widgets/result_dialog.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
