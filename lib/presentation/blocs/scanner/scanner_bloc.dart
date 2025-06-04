@@ -77,7 +77,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
         emit(ScannerFailure(error: {
           'title': 'Lỗi hệ thống',
           'message': 'Đã xảy ra lỗi khi xử lý quét mã QR.',
-          'details': {'errorCode': 'SYS-001', 'reason': e.toString(), 'actions': ['retry', 'dashboard']},
+          'details': {'errorCode': 'SYS-001', 'reason': e.toString(), 'actions': const ['retry', 'dashboard']},
         }));
       }
     });
@@ -156,7 +156,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
             'errorCode': 'SYS-002',
             'reason': e.toString(),
             'device_serial': event.serialNumber,
-            'actions': ['retry', 'dashboard']
+            'actions': const ['retry', 'dashboard']
           },
         }));
       }
@@ -170,7 +170,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
         emit(ScannerFailure(error: {
           'title': 'Lỗi khởi động lại',
           'message': 'Không thể khởi động lại quá trình quét.',
-          'details': {'errorCode': 'SYS-003', 'reason': e.toString(), 'actions': ['dashboard']},
+          'details': {'errorCode': 'SYS-003', 'reason': e.toString(), 'actions': const ['dashboard']},
         }));
       }
     });

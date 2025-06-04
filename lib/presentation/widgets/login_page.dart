@@ -15,7 +15,7 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _remember = false;
+  final bool _remember = false;
   bool _showPassword = false;
   String? _error;
   late AnimationController _animationController;
@@ -198,7 +198,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                       ),
                                       child: Row(
                                         children: [
-                                          Icon(Icons.error_outline, size: 20, color: AppColors.error),
+                                          const Icon(Icons.error_outline, size: 20, color: AppColors.error),
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: Text(

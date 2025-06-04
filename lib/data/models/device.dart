@@ -1,3 +1,10 @@
+
+
+
+
+
+
+
 import 'package:equatable/equatable.dart';
 
 class Device extends Equatable {

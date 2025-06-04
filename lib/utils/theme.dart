@@ -7,7 +7,6 @@ final lightTheme = ThemeData(
   colorScheme: const ColorScheme.light(
     primary: AppColors.primary,
     secondary: AppColors.accent,
-    background: AppColors.background,
     surface: AppColors.cardBackground,
     error: AppColors.error,
   ),
@@ -30,11 +29,11 @@ final lightTheme = ThemeData(
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide(color: AppColors.dividerColor),
+      borderSide: const BorderSide(color: AppColors.dividerColor),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide(color: AppColors.primary, width: 2.0),
+      borderSide: const BorderSide(color: AppColors.primary, width: 2.0),
     ),
     fillColor: Colors.white,
     filled: true,
@@ -52,7 +51,6 @@ final darkTheme = ThemeData(
   colorScheme: const ColorScheme.dark(
     primary: AppColors.primary,
     secondary: AppColors.accent,
-    background: AppColors.darkBackground,
     surface: AppColors.darkCardBackground,
     error: AppColors.error,
   ),

@@ -8,7 +8,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/scanner/scanner_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/qr_overlay.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/result_dialog.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 import '../../utils/di.dart';

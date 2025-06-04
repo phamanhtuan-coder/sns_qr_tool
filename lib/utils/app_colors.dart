@@ -15,7 +15,7 @@ class AppColors {
   static const Color done = Color(0xFF4CAF50); // Green
   static const Color error = Color(0xFFE53935); // Red
   static const Color success = Color(0xFF4CAF50);
-  static const Color warning = Color(0xFFC107); // Yellow
+  static const Color warning = Color(0x00ffc107); // Yellow
   static const Color info = Color(0xFF2196F3); // Blue
 
   // Additional UI colors

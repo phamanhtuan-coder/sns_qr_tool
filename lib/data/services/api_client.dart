@@ -5,9 +5,9 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  // Base URL - Only using ngrok
-  static const String _ngrokUrl = 'https://c3e7-171-250-162-57.ngrok-free.app/api';
-  static String _baseUrl = _ngrokUrl;
+  // Base URL
+  static const String _railwaykUrl = 'https://iothomeconnectapiv2-production.up.railway.app/api';
+  static String _baseUrl = _railwaykUrl;
 
   static String get baseUrl => _baseUrl;
   static set baseUrl(String url) {
@@ -29,7 +29,7 @@ class ApiClient {
   // Initialize the API client - Now only using ngrok URL
   static Future<void> initializeBaseUrl() async {
     // Always use ngrok URL
-    _baseUrl = _ngrokUrl;
+    _baseUrl = _railwaykUrl;
     print('DEBUG: Using ngrok API URL: $_baseUrl');
 
     // Try to save the setting for next time

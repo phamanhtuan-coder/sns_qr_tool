@@ -47,7 +47,6 @@ class _MainAppState extends State<MainApp> {
     if (_showingSplash) {
       return const SplashScreen();
     }
-
     return ChangeNotifierProvider(
       create: (_) => ThemeProvider(),
       child: Consumer<ThemeProvider>(
@@ -91,7 +90,7 @@ class _MainAppState extends State<MainApp> {
                       ),
                     ],
                   ),
-                  body: Dashboard(user: dummyUser),
+                  body: const Dashboard(user: dummyUser),
                 ),
               ),
             },

@@ -34,7 +34,7 @@ class BluetoothClientService {
         final socket = await Socket.connect(
           knownDesktopIp,
           port,
-          timeout: Duration(milliseconds: connectionTimeout)
+          timeout: const Duration(milliseconds: connectionTimeout)
         );
         await socket.close();
         print('📘 INFO: Desktop server found on $knownDesktopIp:$port');
@@ -55,7 +55,7 @@ class BluetoothClientService {
             final socket = await Socket.connect(
               address,
               port,
-              timeout: Duration(milliseconds: connectionTimeout)
+              timeout: const Duration(milliseconds: connectionTimeout)
             );
             await socket.close();
             print('📘 INFO: Desktop server found on $address:$port');
@@ -98,7 +98,7 @@ class BluetoothClientService {
                 final socket = await Socket.connect(
                   host,
                   port,
-                  timeout: Duration(milliseconds: connectionTimeout)
+                  timeout: const Duration(milliseconds: connectionTimeout)
                 );
                 await socket.close();
                 print('📘 INFO: Desktop server found on $host:$port');
@@ -119,7 +119,7 @@ class BluetoothClientService {
                 final socket = await Socket.connect(
                   host,
                   port,
-                  timeout: Duration(milliseconds: connectionTimeout)
+                  timeout: const Duration(milliseconds: connectionTimeout)
                 );
                 await socket.close();
                 print('📘 INFO: Desktop server found on $host:$port');
@@ -159,7 +159,7 @@ class BluetoothClientService {
           final socket = await Socket.connect(
             host,
             port,
-            timeout: Duration(milliseconds: connectionTimeout * 2)
+            timeout: const Duration(milliseconds: connectionTimeout * 2)
           );
 
           // Create a structured message with metadata
@@ -179,7 +179,7 @@ class BluetoothClientService {
           final completer = Completer<bool>();
 
           // Setup a response timeout
-          final responseTimeout = Timer(Duration(milliseconds: 1000), () {
+          final responseTimeout = Timer(const Duration(milliseconds: 1000), () {
             if (!completer.isCompleted) {
               print('⚡ DEBUG: No confirmation received from server, assuming data was sent');
               completer.complete(true);
