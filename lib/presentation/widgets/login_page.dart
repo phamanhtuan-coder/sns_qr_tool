@@ -59,7 +59,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
-    final primaryColor = Theme.of(context).primaryColor;
+    final colorScheme = Theme.of(context).colorScheme;
+    final primaryColor = colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(
@@ -71,7 +72,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             child: IconButton(
               icon: Icon(
                 isDarkMode ? Icons.light_mode : Icons.dark_mode,
-                color: Colors.white,
+                color: isDarkMode ? Colors.white70 : Colors.white,
               ),
               onPressed: () {
                 themeProvider.toggleTheme();
@@ -107,14 +108,14 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // App Logo with shine effect
+                        // App Logo
                         Transform.translate(
                           offset: Offset(0, _slideAnimation.value),
                           child: Container(
                             height: 120,
                             width: 120,
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: isDarkMode ? AppColors.darkSurface : Colors.white,
                               borderRadius: BorderRadius.circular(24),
                               boxShadow: [
                                 BoxShadow(
@@ -138,40 +139,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           ),
                         ),
                         const SizedBox(height: 24),
-                        // App Name
-                        Transform.translate(
-                          offset: Offset(0, _slideAnimation.value * 0.8),
-                          child: Text(
-                            'SmartNet QR Scanner',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
-                              shadows: [
-                                Shadow(
-                                  blurRadius: 3.0,
-                                  color: Colors.black.withOpacity(0.3),
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Transform.translate(
-                          offset: Offset(0, _slideAnimation.value * 0.6),
-                          child: Text(
-                            'Đăng nhập để tiếp tục',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.9),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 40),
-                        // Login Form
+                        // Form Card
                         Transform.translate(
                           offset: Offset(0, _slideAnimation.value * 0.4),
                           child: Card(

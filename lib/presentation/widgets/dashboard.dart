@@ -66,7 +66,7 @@ class Dashboard extends StatelessWidget {
         child: Column(
           children: [
             Container(
-              color: Theme.of(context).cardColor,
+              color: Theme.of(context).colorScheme.surface,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: Row(
                 children: [
@@ -74,24 +74,44 @@ class Dashboard extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: const Icon(Icons.person, size: 32, color: Color(0xFF2563EB)),
+                    child: Icon(Icons.person,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.primary
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Xin chào, ${user.name}', style: Theme.of(context).textTheme.headlineSmall),
+                      Text(
+                        'Xin chào, ${user.name}',
+                        style: Theme.of(context).textTheme.headlineSmall
+                      ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Text(user.role, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                          Text(user.role,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
+                            )
+                          ),
                           const SizedBox(width: 8),
-                          const Text('•', style: TextStyle(color: Colors.grey)),
+                          Text('•',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
+                            )
+                          ),
                           const SizedBox(width: 8),
-                          Text(user.department, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                          Text(user.department,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
+                            )
+                          ),
                         ],
                       ),
                     ],
@@ -105,9 +125,17 @@ class Dashboard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Chức năng sản xuất', style: Theme.of(context).textTheme.headlineSmall),
+                    Text('Chức năng sản xuất',
+                      style: Theme.of(context).textTheme.headlineSmall
+                    ),
                     const SizedBox(height: 8),
-                    const Text('Chọn một chức năng để quét mã QR', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                    Text(
+                      'Chọn một chức năng để quét mã QR',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onBackground.withOpacity(0.6)
+                      )
+                    ),
                     const SizedBox(height: 32),
                     Expanded(
                       child: GridView.builder(
