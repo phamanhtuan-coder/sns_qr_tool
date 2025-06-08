@@ -6,7 +6,6 @@ import 'package:smart_net_qr_scanner/data/services/camera_service.dart';
 import 'package:smart_net_qr_scanner/data/services/bluetooth_client_service.dart'; // Added import
 import 'package:smart_net_qr_scanner/utils/logger.dart';
 import 'package:smart_net_qr_scanner/utils/di.dart';
-
 part 'scanner_event.dart';
 part 'scanner_state.dart';
 
@@ -16,16 +15,9 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
   final CameraService _cameraService = getIt<CameraService>();
   final BluetoothClientService _bluetoothService = getIt<BluetoothClientService>();
   String _currentFunctionId = '';
-  String _currentUsername = '';
 
   // Add listener for Bluetooth connection status
   Stream<ConnectionStatus> get connectionStatus => _bluetoothService.connectionStatus;
-
-  // Add method to set username
-  void setUsername(String username) {
-    _currentUsername = username;
-    _bluetoothService.setUsername(username);
-  }
 
   ScannerBloc() : super(const ScannerInitial()) {
     on<ScanQR>((event, emit) async {
@@ -98,16 +90,6 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
             'title': 'Lỗi dữ liệu',
             'message': 'Không có thông tin thiết bị để gửi.',
             'details': {'errorCode': 'DATA-001', 'reason': 'Empty serial number', 'actions': ['retry', 'dashboard']},
-          }));
-          return;
-        }
-
-        if (_currentUsername.isEmpty && event.functionId == 'firmware') {
-          print("DEBUG: Username not set for firmware update");
-          emit(const ScannerFailure(error: {
-            'title': 'Lỗi xác thực',
-            'message': 'Vui lòng đăng nhập trước khi cập nhật firmware.',
-            'details': {'errorCode': 'AUTH-001', 'reason': 'Username not set', 'actions': ['dashboard']},
           }));
           return;
         }
@@ -203,7 +185,6 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
               'stage': apiResult['data']?['stage'] ?? 'Unknown',
               'status': apiResult['data']?['status'] ?? 'Unknown',
               'sent_to_desktop': functionId == 'firmware' ? 'Thành công' : 'N/A',
-              'username': _currentUsername,
             },
             'actions': const ['retry', 'dashboard'],
           },
@@ -237,7 +218,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
 
   @override
   Future<void> close() {
-    _bluetoothService.dispose(); // Also dispose bluetooth service
+    _bluetoothService.dispose();
     _cameraService.dispose();
     return super.close();
   }

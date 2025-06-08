@@ -9,7 +9,30 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   DashboardBloc() : super(const DashboardState()) {
     on<SelectFunction>((event, emit) {
       try {
-        emit(state.copyWith(selectedFunction: event.functionId.isEmpty ? null : event.functionId));
+        // If selecting empty string (resetting), just clear the selection
+        if (event.functionId.isEmpty) {
+          emit(DashboardState(
+            previousFunction: state.selectedFunction,
+            selectedFunction: '',
+          ));
+          return;
+        }
+
+        // If selecting the same function that was just used (in previousFunction)
+        // allow it to be selected again
+        if (event.functionId == state.previousFunction) {
+          emit(DashboardState(
+            selectedFunction: event.functionId,
+            previousFunction: null,
+          ));
+          return;
+        }
+
+        // Normal selection of a new function
+        emit(DashboardState(
+          selectedFunction: event.functionId,
+          previousFunction: null,
+        ));
       } catch (e, stackTrace) {
         logError('Lỗi xử lý sự kiện SelectFunction', e, stackTrace);
       }

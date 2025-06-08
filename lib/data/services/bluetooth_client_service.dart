@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BluetoothClientService {
   /// The default port used for socket communication with desktop app
@@ -151,19 +152,38 @@ class BluetoothClientService {
     }
   }
 
+  /// Get stored username from SharedPreferences for desktop pairing
+  Future<String> _getStoredUsername() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final username = prefs.getString('user_username');
+      if (username == null || username.isEmpty) {
+        throw Exception('No username found in SharedPreferences');
+      }
+      print('⚡ DEBUG: Retrieved username from SharedPreferences: $username');
+      return username;
+    } catch (e) {
+      print('❌ ERROR: Failed to get username from SharedPreferences: $e');
+      throw Exception('No valid username found');
+    }
+  }
+
   /// Sends serial data to the desktop server
   /// Returns true if successfully sent, false otherwise
   Future<bool> sendSerialToDesktop(String serial, {int port = defaultPort, int retryCount = 0}) async {
     _connectionStatusController.add(ConnectionStatus.connecting);
     print('⚡ DEBUG: Attempting to send serial data: $serial to desktop on port $port');
 
-    if (_currentUsername.isEmpty) {
-      print('❌ ERROR: Username not set. Please set username before sending data.');
-      _connectionStatusController.add(ConnectionStatus.error);
-      return false;
-    }
-
     try {
+      // Get username from SharedPreferences
+      final username = await _getStoredUsername();
+      if (username.isEmpty) {
+        print('❌ ERROR: Username not found in SharedPreferences');
+        _connectionStatusController.add(ConnectionStatus.error);
+        return false;
+      }
+      _currentUsername = username; // Update the current username
+
       String? host = await findDesktopServer(port: port);
 
       if (host != null) {

@@ -57,6 +57,110 @@ class ApiClient {
     await saveCurrentBaseUrl();
   }
 
+  static const String _userPrefKey = 'user_username';
+  static const String _tokenPrefKey = 'access_token';
+
+  // Get the stored access token
+  Future<String?> getAccessToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_tokenPrefKey);
+    } catch (e) {
+      print('DEBUG: Error getting access token: $e');
+      return null;
+    }
+  }
+
+  // Store access token
+  Future<void> setAccessToken(String token) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_tokenPrefKey, token);
+      print('DEBUG: Access token stored successfully');
+    } catch (e) {
+      print('DEBUG: Error storing access token: $e');
+    }
+  }
+
+  // Store username
+  Future<void> setUsername(String username) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_userPrefKey, username);
+      print('DEBUG: Username stored successfully');
+    } catch (e) {
+      print('DEBUG: Error storing username: $e');
+    }
+  }
+
+  // Get stored username
+  Future<String?> getUsername() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_userPrefKey);
+    } catch (e) {
+      print('DEBUG: Error getting username: $e');
+      return null;
+    }
+  }
+
+  // Get headers with authorization if token exists
+  Future<Map<String, String>> get headers async {
+    final baseHeaders = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    final token = await getAccessToken();
+    if (token != null) {
+      baseHeaders['Authorization'] = 'Bearer $token';
+    }
+
+    return baseHeaders;
+  }
+
+  Future<Map<String, dynamic>> login(String username, String password) async {
+    try {
+      final response = await _client.post(
+        Uri.parse('$baseUrl/auth/employee/login'),
+        body: json.encode({
+          'username': username,
+          'password': password,
+        }),
+        headers: _headers,
+      ).timeout(_timeout);
+
+      print('DEBUG: Login response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        final accessToken = responseData['accessToken'];
+
+        // Store access token and username
+        await setAccessToken(accessToken);
+        await setUsername(username);
+
+        return {
+          'success': true,
+          'data': responseData,
+        };
+      }
+
+      return {
+        'success': false,
+        'errorCode': response.statusCode.toString(),
+        'message': 'Login failed: ${_getErrorMessage(response)}',
+      };
+    } catch (e) {
+      print('DEBUG: Login error: $e');
+      return {
+        'success': false,
+        'errorCode': 'LOGIN_ERROR',
+        'message': 'Đăng nhập thất bại. Vui lòng thử lại.',
+      };
+    }
+  }
+
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -65,10 +169,11 @@ class ApiClient {
 
   Future<Map<String, dynamic>> get(String endpoint) async {
     try {
+      final currentHeaders = await headers;
       print('DEBUG: API GET request to: $baseUrl$endpoint');
       final response = await _client.get(
         Uri.parse('$baseUrl$endpoint'),
-        headers: _headers,
+        headers: currentHeaders,
       ).timeout(_timeout);
 
       print('DEBUG: API GET response status: ${response.statusCode}');
@@ -135,11 +240,12 @@ class ApiClient {
     Map<String, dynamic> body,
   ) async {
     try {
+      final currentHeaders = await headers;
       print('DEBUG: API POST request to: $baseUrl$endpoint with body: $body');
       final response = await _client.post(
         Uri.parse('$baseUrl$endpoint'),
         body: json.encode(body),
-        headers: _headers,
+        headers: currentHeaders,
       ).timeout(_timeout);
 
       print('DEBUG: API POST response status: ${response.statusCode}');
@@ -206,11 +312,12 @@ class ApiClient {
     Map<String, dynamic> body,
   ) async {
     try {
+      final currentHeaders = await headers;
       print('DEBUG: API PATCH request to: $baseUrl$endpoint with body: $body');
       final response = await _client.patch(
         Uri.parse('$baseUrl$endpoint'),
         body: json.encode(body),
-        headers: _headers,
+        headers: currentHeaders,
       ).timeout(_timeout);
 
       print('DEBUG: API PATCH response status: ${response.statusCode}');
@@ -275,10 +382,11 @@ class ApiClient {
 
   Future<Map<String, dynamic>> delete(String endpoint) async {
     try {
+      final currentHeaders = await headers;
       print('DEBUG: API DELETE request to: $baseUrl$endpoint');
       final response = await _client.delete(
         Uri.parse('$baseUrl$endpoint'),
-        headers: _headers,
+        headers: currentHeaders,
       ).timeout(_timeout);
 
       print('DEBUG: API DELETE response status: ${response.statusCode}');

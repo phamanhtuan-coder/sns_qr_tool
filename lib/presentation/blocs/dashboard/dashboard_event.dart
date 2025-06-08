@@ -4,7 +4,7 @@ abstract class DashboardEvent extends Equatable {
   const DashboardEvent();
 
   @override
-  List<Object> get props => [];
+  List<Object?> get props => [];
 }
 
 class SelectFunction extends DashboardEvent {
@@ -13,5 +13,5 @@ class SelectFunction extends DashboardEvent {
   const SelectFunction(this.functionId);
 
   @override
-  List<Object> get props => [functionId];
+  List<Object?> get props => [functionId];
 }
