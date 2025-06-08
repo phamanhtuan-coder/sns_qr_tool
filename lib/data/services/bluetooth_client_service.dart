@@ -10,10 +10,18 @@ class BluetoothClientService {
   static const String knownDesktopIp = '192.168.1.7';
 
   /// Timeout duration for connection attempts in milliseconds
-  static const int connectionTimeout = 1000; // Increased from 300ms to 1000ms
+  static const int connectionTimeout = 1000;
 
   /// Maximum number of connection retries
-  static const int maxRetries = 3; // Increased from 2 to 3
+  static const int maxRetries = 3;
+
+  /// Current username (required for desktop pairing)
+  String _currentUsername = '';
+
+  /// Set the current username for desktop pairing
+  void setUsername(String username) {
+    _currentUsername = username;
+  }
 
   /// Stream controller for connection status updates
   final _connectionStatusController = StreamController<ConnectionStatus>.broadcast();
@@ -149,8 +157,13 @@ class BluetoothClientService {
     _connectionStatusController.add(ConnectionStatus.connecting);
     print('⚡ DEBUG: Attempting to send serial data: $serial to desktop on port $port');
 
+    if (_currentUsername.isEmpty) {
+      print('❌ ERROR: Username not set. Please set username before sending data.');
+      _connectionStatusController.add(ConnectionStatus.error);
+      return false;
+    }
+
     try {
-      // If we already know the host from a previous successful connection, try it first
       String? host = await findDesktopServer(port: port);
 
       if (host != null) {
@@ -162,18 +175,16 @@ class BluetoothClientService {
             timeout: const Duration(milliseconds: connectionTimeout * 2)
           );
 
-          // Create a structured message with metadata
+          // Create the payload according to the required format
           final message = jsonEncode({
-            'type': 'serial_data',
-            'data': serial,
-            'timestamp': DateTime.now().toIso8601String(),
-            'device': Platform.isAndroid ? 'Android' : 'iOS',
+            'username': _currentUsername,
+            'serial_number': serial
           });
 
           print('⚡ DEBUG: Sending message: $message');
           socket.write(message);
-          socket.flush(); // Ensure data is sent immediately
-          print('📘 INFO: Serial $serial sent to $host:$port');
+          socket.flush();
+          print('📘 INFO: Serial $serial sent to $host:$port for user $_currentUsername');
 
           // Setup a listener for response
           final completer = Completer<bool>();
@@ -219,7 +230,6 @@ class BluetoothClientService {
           } else {
             _connectionStatusController.add(ConnectionStatus.error);
 
-            // Retry logic
             if (retryCount < maxRetries) {
               print('⚡ DEBUG: Retrying (${retryCount + 1}/$maxRetries)...');
               return sendSerialToDesktop(serial, port: port, retryCount: retryCount + 1);
@@ -230,7 +240,6 @@ class BluetoothClientService {
           print('❌ ERROR: Error sending serial: $e');
           _connectionStatusController.add(ConnectionStatus.error);
 
-          // Retry logic
           if (retryCount < maxRetries) {
             print('⚡ DEBUG: Retrying (${retryCount + 1}/$maxRetries)...');
             return sendSerialToDesktop(serial, port: port, retryCount: retryCount + 1);

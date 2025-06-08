@@ -12,6 +12,10 @@ class ResultDialog extends StatelessWidget {
   final VoidCallback? onRetry; // Callback riêng cho nút Quét lại
   final VoidCallback? onDashboard; // Callback riêng cho nút Quay về/Dashboard
   final bool isLoading;
+  final bool isApiLoading;
+  final bool isBluetoothLoading;
+  final String? apiError;
+  final String? bluetoothError;
 
   const ResultDialog({
     super.key,
@@ -25,18 +29,23 @@ class ResultDialog extends StatelessWidget {
     this.onRetry,
     this.onDashboard,
     this.isLoading = false,
+    this.isApiLoading = false,
+    this.isBluetoothLoading = false,
+    this.apiError,
+    this.bluetoothError,
   });
 
   @override
   Widget build(BuildContext context) {
     final isSuccess = type == 'success';
     final formattedDetails = _formatDetails();
+    final hasErrors = apiError != null || bluetoothError != null;
 
     return Stack(
       children: [
         GestureDetector(
           onTap: onClose,
-          child: Container(color: Colors.black.withAlpha(179)), // 0.7 * 255 ≈ 179
+          child: Container(color: Colors.black.withAlpha(179)),
         ),
         Center(
           child: SingleChildScrollView(
@@ -47,6 +56,13 @@ class ResultDialog extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -54,6 +70,8 @@ class ResultDialog extends StatelessWidget {
                   _buildHeader(context, isSuccess),
                   if (formattedDetails.isNotEmpty)
                     _buildDetailsSection(context, formattedDetails),
+                  if (hasErrors)
+                    _buildErrorSection(context),
                   _buildActions(context, isSuccess, actions),
                 ],
               ),
@@ -162,9 +180,53 @@ class ResultDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildActions(BuildContext context, bool isSuccess, List<String> actionsList) {
-    print("DEBUG: Building actions with: $actionsList");
+  Widget _buildErrorSection(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.1),
+        border: Border(
+          top: BorderSide(color: Theme.of(context).dividerColor),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (apiError != null) ...[
+            Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'API: $apiError',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (bluetoothError != null) ...[
+            Row(
+              children: [
+                const Icon(Icons.bluetooth_disabled, color: Colors.red, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Bluetooth: $bluetoothError',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
+  Widget _buildActions(BuildContext context, bool isSuccess, List<String> actionsList) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -184,6 +246,9 @@ class ResultDialog extends StatelessWidget {
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.grey[700],
                   padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -205,22 +270,47 @@ class ResultDialog extends StatelessWidget {
           if (actionsList.contains('submit'))
             Expanded(
               child: ElevatedButton(
-                onPressed: isLoading ? null : onSubmit,
+                onPressed: (isApiLoading || isBluetoothLoading) ? null : onSubmit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   disabledBackgroundColor: Colors.blue.withOpacity(0.6),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (isApiLoading || isBluetoothLoading)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white.withOpacity(0.8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            isApiLoading && isBluetoothLoading
+                                ? 'Đang xử lý...'
+                                : isApiLoading
+                                    ? 'Đang gửi API...'
+                                    : 'Đang kết nối...',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.8),
+                            ),
+                          ),
+                        ],
                       )
-                    : const Row(
+                    else
+                      const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.check_circle, size: 20),
@@ -228,6 +318,8 @@ class ResultDialog extends StatelessWidget {
                           Text('Xác nhận'),
                         ],
                       ),
+                  ],
+                ),
               ),
             ),
 
@@ -244,6 +336,9 @@ class ResultDialog extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isSuccess ? Colors.green : Colors.red,
                   padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,

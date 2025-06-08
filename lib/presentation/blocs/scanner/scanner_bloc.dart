@@ -14,11 +14,18 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
   final ScannerService _scannerService = getIt<ScannerService>();
   final ProductionService _productionService = getIt<ProductionService>();
   final CameraService _cameraService = getIt<CameraService>();
-  final BluetoothClientService _bluetoothService = getIt<BluetoothClientService>(); // Added service
-  String _currentFunctionId = ''; // Store current function ID/purpose
+  final BluetoothClientService _bluetoothService = getIt<BluetoothClientService>();
+  String _currentFunctionId = '';
+  String _currentUsername = '';
 
   // Add listener for Bluetooth connection status
   Stream<ConnectionStatus> get connectionStatus => _bluetoothService.connectionStatus;
+
+  // Add method to set username
+  void setUsername(String username) {
+    _currentUsername = username;
+    _bluetoothService.setUsername(username);
+  }
 
   ScannerBloc() : super(const ScannerInitial()) {
     on<ScanQR>((event, emit) async {
@@ -95,57 +102,17 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           return;
         }
 
-        bool sentToDesktop = false;
-
-        // Only send data via Bluetooth for firmware mode
-        if (event.functionId == 'firmware') {
-          // Try to send data to desktop via Bluetooth/Socket
-          print("⚡ DEBUG: Firmware mode - attempting to send serial data to desktop");
-          sentToDesktop = await _bluetoothService.sendSerialToDesktop(event.serialNumber);
-          print("⚡ DEBUG: Sent to desktop result: $sentToDesktop");
-        } else {
-          print("⚡ DEBUG: Non-firmware mode - skipping Bluetooth communication");
+        if (_currentUsername.isEmpty && event.functionId == 'firmware') {
+          print("DEBUG: Username not set for firmware update");
+          emit(const ScannerFailure(error: {
+            'title': 'Lỗi xác thực',
+            'message': 'Vui lòng đăng nhập trước khi cập nhật firmware.',
+            'details': {'errorCode': 'AUTH-001', 'reason': 'Username not set', 'actions': ['dashboard']},
+          }));
+          return;
         }
 
-        // Always call the API for all modes
-        print("DEBUG: Calling processScannedSerial with serial: ${event.serialNumber}, functionId: ${event.functionId}");
-        final result = await _productionService.processScannedSerial(
-          event.serialNumber,
-          functionId: event.functionId,
-        );
-        print("DEBUG: API result: $result");
-
-        if (result['success']) {
-          print("DEBUG: API call successful, emitting success state");
-          emit(ScannerSuccess(result: {
-            'title': 'Thành công',
-            'message': event.functionId == 'firmware'
-              ? (sentToDesktop
-                  ? 'Đã cập nhật thông tin thiết bị và gửi dữ liệu tới máy tính thành công'
-                  : 'Đã cập nhật thông tin thiết bị thành công (Không gửi được tới PC)')
-              : 'Đã cập nhật thông tin thiết bị thành công',
-            'details': {
-              'device_serial': event.serialNumber,
-              'stage': result['data']?['stage'] ?? 'Unknown',
-              'status': result['data']?['status'] ?? 'Unknown',
-              'sent_to_desktop': event.functionId == 'firmware' ? (sentToDesktop ? 'Thành công' : 'Thất bại') : 'N/A'
-            },
-            'actions': const ['retry', 'dashboard'],
-          }));
-        } else {
-          print("DEBUG: API call failed: ${result['message']}");
-          emit(ScannerFailure(error: {
-            'title': 'Lỗi cập nhật',
-            'message': result['message'] ?? 'Không thể cập nhật thông tin thiết bị.',
-            'details': {
-              'errorCode': result['errorCode'] ?? 'API-001',
-              'reason': result['message'] ?? 'Unknown error',
-              'device_serial': event.serialNumber,
-              'sent_to_desktop': event.functionId == 'firmware' ? (sentToDesktop ? 'Thành công' : 'Thất bại') : 'N/A'
-            },
-            'actions': const ['retry', 'dashboard'],
-          }));
-        }
+        await _handleSubmitScan(event.serialNumber, event.functionId, emit);
       } catch (e, stackTrace) {
         print("DEBUG: Exception in SubmitScan handler: $e");
         logError('Lỗi xử lý sự kiện SubmitScan', e, stackTrace);
@@ -178,6 +145,94 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
     on<ResetScanner>((event, emit) {
       emit(const ScannerInitial());
     });
+  }
+
+  Future<void> _handleSubmitScan(String serialNumber, String functionId, Emitter<ScannerState> emit) async {
+    if (state is! ScannerSuccess) return;
+    final currentState = state as ScannerSuccess;
+
+    try {
+      // Set loading states
+      emit(currentState.copyWith(
+        isApiLoading: true,
+        isBluetoothLoading: functionId == 'firmware',
+      ));
+
+      // Start both operations concurrently if in firmware mode
+      final Future<bool> bluetoothFuture = functionId == 'firmware'
+          ? _bluetoothService.sendSerialToDesktop(serialNumber)
+          : Future.value(true);
+
+      final Future<Map<String, dynamic>> apiFuture = _productionService.processScannedSerial(
+        serialNumber,
+        functionId: functionId,
+      );
+
+      // Wait for both operations to complete
+      final results = await Future.wait([
+        bluetoothFuture,
+        apiFuture,
+      ]);
+
+      final bool bluetoothSuccess = results[0] as bool;
+      final Map<String, dynamic> apiResult = results[1] as Map<String, dynamic>;
+
+      // Handle API result
+      String? apiError;
+      if (!apiResult['success']) {
+        apiError = apiResult['message'] ?? 'Không thể cập nhật thông tin thiết bị';
+      }
+
+      // Handle Bluetooth result
+      String? bluetoothError;
+      if (functionId == 'firmware' && !bluetoothSuccess) {
+        bluetoothError = 'Không thể gửi dữ liệu tới máy tính';
+      }
+
+      // Update state based on results
+      if (apiResult['success'] && (functionId != 'firmware' || bluetoothSuccess)) {
+        // Complete success
+        emit(ScannerSuccess(
+          result: {
+            'title': 'Thành công',
+            'message': functionId == 'firmware'
+                ? 'Đã cập nhật thông tin thiết bị và gửi dữ liệu tới máy tính thành công'
+                : 'Đã cập nhật thông tin thiết bị thành công',
+            'details': {
+              'device_serial': serialNumber,
+              'stage': apiResult['data']?['stage'] ?? 'Unknown',
+              'status': apiResult['data']?['status'] ?? 'Unknown',
+              'sent_to_desktop': functionId == 'firmware' ? 'Thành công' : 'N/A',
+              'username': _currentUsername,
+            },
+            'actions': const ['retry', 'dashboard'],
+          },
+        ));
+      } else {
+        // Partial success or complete failure
+        emit(currentState.copyWith(
+          isApiLoading: false,
+          isBluetoothLoading: false,
+          apiError: apiError,
+          bluetoothError: bluetoothError,
+          result: {
+            ...currentState.result,
+            'details': {
+              ...currentState.result['details'] as Map<String, dynamic>,
+              'sent_to_desktop': functionId == 'firmware'
+                  ? (bluetoothSuccess ? 'Thành công' : 'Thất bại')
+                  : 'N/A',
+            },
+          },
+        ));
+      }
+    } catch (e) {
+      emit(currentState.copyWith(
+        isApiLoading: false,
+        isBluetoothLoading: false,
+        apiError: 'Lỗi hệ thống: ${e.toString()}',
+      ));
+    }
   }
 
   @override
