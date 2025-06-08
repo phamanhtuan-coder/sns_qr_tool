@@ -1,6 +1,5 @@
 import 'package:get_it/get_it.dart';
 import 'package:smart_net_qr_scanner/data/services/auth_service.dart';
-import 'package:smart_net_qr_scanner/data/services/device_service.dart';
 import 'package:smart_net_qr_scanner/data/services/scanner_service.dart';
 import 'package:smart_net_qr_scanner/data/services/production_service.dart';
 import 'package:smart_net_qr_scanner/data/services/camera_service.dart';
@@ -16,7 +15,6 @@ void setupDependencies() {
   // Register services first
   getIt.registerSingleton<ProductionService>(ProductionService());
   getIt.registerSingleton<AuthService>(AuthService());
-  getIt.registerSingleton<DeviceService>(DeviceService());
   getIt.registerSingleton<ScannerService>(ScannerService());
   getIt.registerSingleton<CameraService>(CameraService());
   getIt.registerSingleton<BluetoothClientService>(BluetoothClientService());
