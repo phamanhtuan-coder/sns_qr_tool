@@ -99,18 +99,10 @@ class AppRouter {
                         }
                       },
                       child: Scaffold(
-                        appBar: CustomAppBar(
+                        appBar: const CustomAppBar(
                           title: 'SmartNet QR Scanner',
                           showThemeSwitch: true,
                           automaticallyImplyLeading: false, // No back button on dashboard
-                          actions: [
-                            // Add logout button
-                            IconButton(
-                              icon: const Icon(Icons.logout, color: Colors.white),
-                              onPressed: () => _showLogoutDialog(context),
-                              tooltip: 'Đăng xuất',
-                            ),
-                          ],
                         ),
                         body: Dashboard(
                           user: state.user ?? const User(
@@ -163,7 +155,7 @@ class AppRouter {
         return _buildPageRoute(
           settings,
           Scaffold(
-            appBar: CustomAppBar(
+            appBar: const CustomAppBar(
               title: 'Không tìm thấy trang',
               showThemeSwitch: true,
               automaticallyImplyLeading: true, // Show back button to navigate back

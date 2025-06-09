@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
 import 'package:smart_net_qr_scanner/routes/app_router.dart';
 import 'package:smart_net_qr_scanner/utils/app_colors.dart';
 import 'package:smart_net_qr_scanner/utils/theme_provider.dart';
@@ -30,12 +28,10 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final themeProvider = Provider.of<ThemeProvider>(context);
 
-    // Check if we're on a screen that should show back button
-    final currentRoute = ModalRoute.of(context)?.settings.name;
-    final canGoBack = automaticallyImplyLeading &&
-                     currentRoute != AppRouter.splash &&
-                     !(currentRoute == AppRouter.dashboard &&
-                       Navigator.of(context).canPop() == false);
+    // Simplified back button logic - only show if explicitly requested
+    final showBackButton = automaticallyImplyLeading &&
+        Navigator.of(context).canPop() &&
+        ModalRoute.of(context)?.settings.name != AppRouter.dashboard;
 
     return Container(
       decoration: BoxDecoration(
@@ -54,20 +50,20 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
           child: Row(
             children: [
               // Back button if needed
-              if (canGoBack)
+              if (showBackButton)
                 IconButton(
                   icon: const Icon(
                     Icons.arrow_back,
                     color: Colors.white,
                   ),
                   onPressed: onBackPressed ?? () {
-                    Navigator.maybePop(context);
+                    Navigator.of(context).pop();
                   },
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   iconSize: 24,
                 ),
-              const SizedBox(width: 12),
+              if (showBackButton) const SizedBox(width: 12),
               Text(
                 title,
                 style: const TextStyle(

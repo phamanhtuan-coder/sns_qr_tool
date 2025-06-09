@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_qr_scanner/data/models/user.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/dashboard/dashboard_bloc.dart';
+import 'package:smart_net_qr_scanner/routes/app_router.dart';
 import 'package:smart_net_qr_scanner/utils/app_colors.dart';
 
 class Dashboard extends StatelessWidget {
@@ -87,6 +88,7 @@ class Dashboard extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(
+            automaticallyImplyLeading: false,
             backgroundColor: isDarkMode ? AppColors.darkHeaderBackground : AppColors.primary,
             elevation: 4,
             shadowColor: Colors.black26,
@@ -137,6 +139,11 @@ class Dashboard extends StatelessWidget {
                 onPressed: () => _showHelpDialog(context),
                 icon: const Icon(Icons.help_outline, color: Colors.white),
                 tooltip: 'Hướng dẫn sử dụng',
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout, color: Colors.white),
+                onPressed: () => _showLogoutDialog(context),
+                tooltip: 'Đăng xuất',
               ),
               const SizedBox(width: 8),
             ],
@@ -429,6 +436,37 @@ class Dashboard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Đăng xuất'),
+        content: const Text('Bạn có chắc chắn muốn đăng xuất?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext); // Close dialog
+
+              // Logout and navigate to login screen
+              context.read<AuthBloc>().add(const LogoutEvent());
+
+              // Navigate to login screen
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                AppRouter.login,
+                (route) => false,
+              );
+            },
+            child: const Text('Đăng xuất'),
+          ),
+        ],
+      ),
     );
   }
 }
