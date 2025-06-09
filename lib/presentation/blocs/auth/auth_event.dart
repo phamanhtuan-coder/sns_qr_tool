@@ -10,12 +10,12 @@ abstract class AuthEvent extends Equatable {
 class LoginEvent extends AuthEvent {
   final String username;
   final String password;
-  final bool remember;
+  final BuildContext? context;
 
-  const LoginEvent(this.username, this.password, this.remember);
+  const LoginEvent(this.username, this.password, {this.context});
 
   @override
-  List<Object> get props => [username, password, remember];
+  List<Object> get props => [username, password];
 }
 
 class CheckLoginStatus extends AuthEvent {
@@ -24,4 +24,8 @@ class CheckLoginStatus extends AuthEvent {
 
 class LogoutEvent extends AuthEvent {
   const LogoutEvent();
+}
+
+class TokenExpiringEvent extends AuthEvent {
+  const TokenExpiringEvent();
 }

@@ -24,7 +24,7 @@ class ApiClient {
 
   ApiClient({http.Client? client, Duration? timeout})
       : _client = client ?? http.Client(),
-        _timeout = timeout ?? const Duration(seconds: 30);
+        _timeout = timeout ?? const Duration(seconds: 10); // Reduced timeout
 
   // Initialize the API client - Now only using ngrok URL
   static Future<void> initializeBaseUrl() async {
@@ -72,24 +72,34 @@ class ApiClient {
   }
 
   // Store access token
-  Future<void> setAccessToken(String token) async {
+  Future<void> setAccessToken(String? token) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenPrefKey, token);
-      print('DEBUG: Access token stored successfully');
+      if (token == null) {
+        await prefs.remove(_tokenPrefKey);
+        print('DEBUG: Access token removed from storage');
+      } else {
+        await prefs.setString(_tokenPrefKey, token);
+        print('DEBUG: Access token stored successfully');
+      }
     } catch (e) {
-      print('DEBUG: Error storing access token: $e');
+      print('DEBUG: Error managing access token in storage: $e');
     }
   }
 
   // Store username
-  Future<void> setUsername(String username) async {
+  Future<void> setUsername(String? username) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_userPrefKey, username);
-      print('DEBUG: Username stored successfully');
+      if (username == null) {
+        await prefs.remove(_userPrefKey);
+        print('DEBUG: Username removed from storage');
+      } else {
+        await prefs.setString(_userPrefKey, username);
+        print('DEBUG: Username stored successfully');
+      }
     } catch (e) {
-      print('DEBUG: Error storing username: $e');
+      print('DEBUG: Error managing username in storage: $e');
     }
   }
 
@@ -119,53 +129,50 @@ class ApiClient {
     return baseHeaders;
   }
 
-  Future<Map<String, dynamic>> login(String username, String password) async {
+  Map<String, String> _getDefaultHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Origin, Content-Type, Accept, Authorization',
+    };
+  }
+
+  Future<Map<String, dynamic>> _handleRequest(Future<http.Response> Function() request) async {
     try {
-      final response = await _client.post(
-        Uri.parse('$baseUrl/auth/employee/login'),
-        body: json.encode({
-          'username': username,
-          'password': password,
-        }),
-        headers: _headers,
-      ).timeout(_timeout);
+      final response = await request().timeout(_timeout);
+      final responseBody = json.decode(response.body);
 
-      print('DEBUG: Login response status: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        final accessToken = responseData['accessToken'];
-
-        // Store access token and username
-        await setAccessToken(accessToken);
-        await setUsername(username);
-
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return responseBody;
+      } else {
+        print('DEBUG: API error status ${response.statusCode}: ${response.body}');
         return {
-          'success': true,
-          'data': responseData,
+          'success': false,
+          'message': responseBody['message'] ?? 'Lỗi máy chủ, vui lòng thử lại sau',
         };
       }
-
+    } on TimeoutException {
+      print('DEBUG: API request timed out');
       return {
         'success': false,
-        'errorCode': response.statusCode.toString(),
-        'message': 'Login failed: ${_getErrorMessage(response)}',
+        'message': 'Không thể kết nối đến máy chủ, vui lòng kiểm tra kết nối mạng',
+      };
+    } on SocketException {
+      print('DEBUG: Network connection error');
+      return {
+        'success': false,
+        'message': 'Không thể kết nối đến máy chủ, vui lòng kiểm tra kết nối mạng',
       };
     } catch (e) {
-      print('DEBUG: Login error: $e');
+      print('DEBUG: Unexpected API error: $e');
       return {
         'success': false,
-        'errorCode': 'LOGIN_ERROR',
-        'message': 'Đăng nhập thất bại. Vui lòng thử lại.',
+        'message': 'Có lỗi xảy ra, vui lòng thử lại',
       };
     }
   }
-
-  Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    // Add other headers like auth tokens here in the future
-  };
 
   Future<Map<String, dynamic>> get(String endpoint) async {
     try {

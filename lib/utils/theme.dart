@@ -51,7 +51,7 @@ final ThemeData darkTheme = ThemeData(
   brightness: Brightness.dark,
   primaryColor: AppColors.primary,
   scaffoldBackgroundColor: AppColors.darkBackground,
-  colorScheme: ColorScheme.dark(
+  colorScheme: const ColorScheme.dark(
     primary: AppColors.primary,
     secondary: AppColors.accent,
     surface: AppColors.darkSurface,

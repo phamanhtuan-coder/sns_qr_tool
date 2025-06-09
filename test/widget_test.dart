@@ -5,25 +5,54 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:smart_net_qr_scanner/main.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/dashboard/dashboard_bloc.dart';
+import 'package:smart_net_qr_scanner/presentation/screens/splash_screen.dart';
+import 'package:smart_net_qr_scanner/routes/app_router.dart';
+import 'package:smart_net_qr_scanner/utils/di.dart';
+import 'package:smart_net_qr_scanner/utils/theme.dart';
+import 'package:smart_net_qr_scanner/utils/theme_provider.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  setUp(() {
+    setupDependencies();
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('App renders without crashing', (WidgetTester tester) async {
+    final themeProvider = ThemeProvider();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // Build our app and trigger a frame
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: themeProvider),
+          BlocProvider(
+            create: (context) => getIt<AuthBloc>()..add(CheckLoginStatus()),
+            lazy: false,
+          ),
+          BlocProvider(
+            create: (context) => getIt<DashboardBloc>(),
+            lazy: false,
+          ),
+        ],
+        child: MaterialApp(
+          navigatorKey: AppRouter.globalNavigatorKey,
+          debugShowCheckedModeBanner: false,
+          title: 'Smart Net QR Scanner',
+          theme: lightTheme,
+          darkTheme: darkTheme,
+          themeMode: themeProvider.themeMode,
+          home: const SplashScreen(),
+          onGenerateRoute: AppRouter.onGenerateRoute,
+        ),
+      ),
+    );
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Verify that the splash screen is shown initially
+    expect(find.byType(SplashScreen), findsOneWidget);
   });
 }

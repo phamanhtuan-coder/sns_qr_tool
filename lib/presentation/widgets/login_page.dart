@@ -1,23 +1,31 @@
 import 'package:flutter/material.dart';
-import 'package:smart_net_qr_scanner/utils/app_colors.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
-import 'package:smart_net_qr_scanner/utils/theme_provider.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
+import 'package:smart_net_qr_scanner/utils/app_colors.dart';
+
+import '../../utils/theme_provider.dart';
 
 class LoginPage extends StatefulWidget {
-  final Function({required String username, required String password, required bool remember}) onLogin;
+  final Function({
+    required String username,
+    required String password,
+  }) onLogin;
 
   const LoginPage({super.key, required this.onLogin});
 
   @override
-  _LoginPageState createState() => _LoginPageState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
+  final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  final bool _remember = false;
   bool _showPassword = false;
   String? _error;
+  bool _isLoading = false;
+
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _slideAnimation;
@@ -25,26 +33,41 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   @override
   void initState() {
     super.initState();
+
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(
       CurvedAnimation(
         parent: _animationController,
-        curve: Curves.easeIn,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeIn),
       ),
     );
 
-    _slideAnimation = Tween<double>(begin: 50.0, end: 0.0).animate(
+    _slideAnimation = Tween<double>(
+      begin: 50.0,
+      end: 0.0,
+    ).animate(
       CurvedAnimation(
         parent: _animationController,
-        curve: Curves.easeOut,
+        curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
       ),
     );
 
     _animationController.forward();
+
+    // Listen for auth state changes
+    context.read<AuthBloc>().stream.listen((state) {
+      setState(() {
+        _error = state.error;
+        _isLoading = state.isLoading;
+      });
+    });
   }
 
   @override
@@ -56,16 +79,22 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   }
 
   void _handleLogin() {
-    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
-      setState(() {
-        _error = 'Vui lòng nhập đầy đủ thông tin đăng nhập';
-      });
-      return;
+    if (_formKey.currentState?.validate() ?? false) {
+      // Pass the context to the login event for navigation
+      context.read<AuthBloc>().add(LoginEvent(
+        _usernameController.text,
+        _passwordController.text,
+        context: context
+      ));
     }
-    widget.onLogin(
-      username: _usernameController.text,
-      password: _passwordController.text,
-      remember: _remember,
+  }
+
+  Color _withOpacity(Color color, double opacity) {
+    return Color.fromARGB(
+      (opacity * 255).round(),
+      (color.r * 255.0).round() & 0xff,
+      (color.g * 255.0).round() & 0xff,
+      (color.b * 255.0).round() & 0xff,
     );
   }
 
@@ -76,8 +105,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     final colorScheme = Theme.of(context).colorScheme;
     final primaryColor = colorScheme.primary;
 
-    return WillPopScope(
-      onWillPop: () async => false, // Prevent back button navigation
+    return PopScope(
+      canPop: false, // Prevent back navigation
       child: Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: false, // Disable back button
@@ -108,14 +137,14 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
               colors: [
                 isDarkMode ? AppColors.darkHeaderBackground : AppColors.primary,
                 isDarkMode
-                  ? AppColors.darkBackground.withOpacity(0.8)
-                  : AppColors.accent.withOpacity(0.8),
+                  ? _withOpacity(AppColors.darkBackground, 0.8)
+                  : _withOpacity(AppColors.accent, 0.8),
               ],
             ),
           ),
           child: AnimatedBuilder(
             animation: _animationController,
-            builder: (context, _) {
+            builder: (context, child) {
               return FadeTransition(
                 opacity: _fadeAnimation,
                 child: Center(
@@ -136,7 +165,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                 borderRadius: BorderRadius.circular(24),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.2),
+                                    color: _withOpacity(Colors.black, 0.2),
                                     blurRadius: 20,
                                     offset: const Offset(0, 10),
                                   ),
@@ -166,114 +195,150 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.all(24),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (_error != null)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                                        margin: const EdgeInsets.only(bottom: 20),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.error.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: AppColors.error.withOpacity(0.3),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.error_outline, size: 20, color: AppColors.error),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Text(
-                                                _error!,
-                                                style: const TextStyle(
-                                                  color: AppColors.error,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
+                                padding: const EdgeInsets.all(24.0),
+                                child: Form(
+                                  key: _formKey,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Error message
+                                      if (_error != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(bottom: 16.0),
+                                          child: Container(
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: isDarkMode
+                                                ? _withOpacity(Colors.red, 0.1)
+                                                : _withOpacity(Colors.red, 0.05),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: _withOpacity(Colors.red, 0.3),
+                                                width: 1,
                                               ),
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                    Text(
-                                      'ĐĂNG NHẬP',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                        color: primaryColor,
-                                        letterSpacing: 1.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    // Username Field
-                                    TextField(
-                                      controller: _usernameController,
-                                      decoration: InputDecoration(
-                                        labelText: 'Tên đăng nhập',
-                                        hintText: 'Nhập tên đăng nhập',
-                                        prefixIcon: Icon(Icons.person_outline, color: primaryColor),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        filled: true,
-                                        fillColor: isDarkMode ? AppColors.darkSurface : Colors.white.withOpacity(0.9),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 20),
-                                    // Password Field
-                                    TextField(
-                                      controller: _passwordController,
-                                      obscureText: !_showPassword,
-                                      decoration: InputDecoration(
-                                        labelText: 'Mật khẩu',
-                                        hintText: 'Nhập mật khẩu',
-                                        prefixIcon: Icon(Icons.lock_outline, color: primaryColor),
-                                        suffixIcon: IconButton(
-                                          icon: Icon(
-                                            _showPassword ? Icons.visibility_off : Icons.visibility,
-                                            color: Colors.grey,
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.error_outline,
+                                                  color: Colors.red[300],
+                                                  size: 20,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    _error!,
+                                                    style: TextStyle(
+                                                      color: isDarkMode
+                                                        ? Colors.red[300]
+                                                        : Colors.red[700],
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                          onPressed: () {
-                                            setState(() {
-                                              _showPassword = !_showPassword;
-                                            });
-                                          },
                                         ),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(12),
+                                      Text(
+                                        'ĐĂNG NHẬP',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: primaryColor,
+                                          letterSpacing: 1.5,
                                         ),
-                                        filled: true,
-                                        fillColor: isDarkMode ? AppColors.darkSurface : Colors.white.withOpacity(0.9),
                                       ),
-                                    ),
-                                    const SizedBox(height: 40),
-                                    // Login Button
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 50,
-                                      child: ElevatedButton(
-                                        onPressed: _handleLogin,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: primaryColor,
-                                          foregroundColor: Colors.white,
-                                          elevation: 2,
-                                          shape: RoundedRectangleBorder(
+                                      const SizedBox(height: 24),
+                                      // Username Field
+                                      TextFormField(
+                                        controller: _usernameController,
+                                        decoration: InputDecoration(
+                                          labelText: 'Tên đăng nhập',
+                                          hintText: 'Nhập tên đăng nhập',
+                                          prefixIcon: Icon(Icons.person_outline, color: primaryColor),
+                                          border: OutlineInputBorder(
                                             borderRadius: BorderRadius.circular(12),
                                           ),
+                                          filled: true,
+                                          fillColor: isDarkMode ? AppColors.darkSurface : _withOpacity(Colors.white, 0.9),
                                         ),
-                                        child: const Text(
-                                          'ĐĂNG NHẬP',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                            letterSpacing: 1.2,
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Vui lòng nhập tên đăng nhập';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      const SizedBox(height: 20),
+                                      // Password Field
+                                      TextFormField(
+                                        controller: _passwordController,
+                                        obscureText: !_showPassword,
+                                        decoration: InputDecoration(
+                                          labelText: 'Mật khẩu',
+                                          hintText: 'Nhập mật khẩu',
+                                          prefixIcon: Icon(Icons.lock_outline, color: primaryColor),
+                                          suffixIcon: IconButton(
+                                            icon: Icon(
+                                              _showPassword ? Icons.visibility_off : Icons.visibility,
+                                              color: Colors.grey,
+                                            ),
+                                            onPressed: () {
+                                              setState(() {
+                                                _showPassword = !_showPassword;
+                                              });
+                                            },
                                           ),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          filled: true,
+                                          fillColor: isDarkMode ? AppColors.darkSurface : _withOpacity(Colors.white, 0.9),
+                                        ),
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Vui lòng nhập mật khẩu';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      const SizedBox(height: 40),
+                                      // Login Button
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 50,
+                                        child: ElevatedButton(
+                                          onPressed: _isLoading ? null : _handleLogin,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: primaryColor,
+                                            foregroundColor: Colors.white,
+                                            elevation: 2,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                          ),
+                                          child: _isLoading
+                                              ? SizedBox(
+                                                  height: 24,
+                                                  width: 24,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                  ),
+                                                )
+                                              : const Text(
+                                                  'ĐĂNG NHẬP',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 16,
+                                                    letterSpacing: 1.2,
+                                                  ),
+                                                ),
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -284,7 +349,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             child: Text(
                               'Phiên bản 1.0.0',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                color: _withOpacity(Colors.white, 0.7),
                                 fontSize: 12,
                               ),
                             ),
