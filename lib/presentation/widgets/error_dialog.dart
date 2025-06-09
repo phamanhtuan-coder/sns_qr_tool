@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:smart_net_qr_scanner/data/models/device.dart';
+import 'package:smart_net_qr_scanner/utils/app_colors.dart';
 
 class ErrorDialog extends StatefulWidget {
   final Device device;
@@ -24,6 +25,9 @@ class _ErrorDialogState extends State<ErrorDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isTextEmpty = _reasonController.text.trim().isEmpty;
+
     return Stack(
       children: [
         GestureDetector(
@@ -37,6 +41,13 @@ class _ErrorDialogState extends State<ErrorDialog> {
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -44,12 +55,26 @@ class _ErrorDialogState extends State<ErrorDialog> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+                    color: theme.brightness == Brightness.light
+                        ? Colors.red.shade50
+                        : Colors.red.shade900.withOpacity(0.2),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Báo cáo lỗi thiết bị', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                      Row(
+                        children: [
+                          Icon(Icons.error_outline,
+                              color: theme.brightness == Brightness.light
+                                  ? Colors.red.shade700
+                                  : Colors.red.shade300,
+                              size: 24),
+                          const SizedBox(width: 12),
+                          const Text('Báo cáo lỗi thiết bị',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                        ],
+                      ),
                       IconButton(
                         icon: const Icon(Icons.close, size: 20),
                         onPressed: widget.onClose,
@@ -60,45 +85,97 @@ class _ErrorDialogState extends State<ErrorDialog> {
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Serial Number:', style: TextStyle(fontSize: 14)),
-                          Text(widget.device.serial, style: Theme.of(context).textTheme.bodyMedium),
+                          const Text('Serial Number:',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                          Text(widget.device.serial,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w500
+                              )),
                         ],
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _reasonController,
-                        decoration: const InputDecoration(
+                        onChanged: (value) => setState(() {}),
+                        decoration: InputDecoration(
                           labelText: 'Lý do lỗi *',
-                          border: OutlineInputBorder(),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: AppColors.error, width: 2),
+                          ),
                         ),
                         maxLines: 3,
                       ),
                       const SizedBox(height: 16),
                       // Note: File picker not implemented; requires file_picker package
-                      const Text('Ảnh minh chứng (tùy chọn)', style: TextStyle(fontSize: 14)),
+                      const Text('Ảnh minh chứng (tùy chọn)',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 8),
-                      ElevatedButton(
+                      ElevatedButton.icon(
                         onPressed: () {}, // Implement file picker
-                        child: const Text('Choose File'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: theme.brightness == Brightness.light
+                              ? AppColors.primary
+                              : AppColors.accent,
+                          backgroundColor: theme.brightness == Brightness.light
+                              ? Colors.grey.shade200
+                              : Colors.grey.shade800,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        icon: const Icon(Icons.upload_file, size: 18),
+                        label: const Text('Tải ảnh lên'),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           TextButton(
                             onPressed: widget.onClose,
+                            style: TextButton.styleFrom(
+                              foregroundColor: theme.brightness == Brightness.light
+                                  ? Colors.grey[700]
+                                  : Colors.grey[300],
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
                             child: const Text('Hủy'),
                           ),
-                          ElevatedButton(
-                            onPressed: _reasonController.text.trim().isEmpty
+                          const SizedBox(width: 16),
+                          ElevatedButton.icon(
+                            onPressed: isTextEmpty
                                 ? null
                                 : () => setState(() => _confirmDialogOpen = true),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                            child: const Text('Báo lỗi'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.error,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: theme.brightness == Brightness.light
+                                  ? AppColors.error.withOpacity(0.5)
+                                  : AppColors.error.withOpacity(0.3),
+                              disabledForegroundColor: theme.brightness == Brightness.light
+                                  ? Colors.white70
+                                  : Colors.white54,
+                              elevation: 2,
+                              shadowColor: AppColors.shadowColor,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            icon: const Icon(Icons.report_problem, size: 18),
+                            label: const Text('Báo lỗi'),
                           ),
                         ],
                       ),
@@ -110,23 +187,70 @@ class _ErrorDialogState extends State<ErrorDialog> {
           ),
         ),
         if (_confirmDialogOpen)
-          AlertDialog(
-            title: const Text('Xác nhận báo lỗi'),
-            content: const Text('Bạn có chắc chắn muốn báo lỗi thiết bị này không?'),
-            actions: [
-              TextButton(
-                onPressed: () => setState(() => _confirmDialogOpen = false),
-                child: const Text('Hủy'),
+          Center(
+            child: Container(
+              margin: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Theme.of(context).dialogBackgroundColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
-              ElevatedButton(
-                onPressed: () {
-                  widget.onConfirm(_reasonController.text, _imageUrl);
-                  setState(() => _confirmDialogOpen = false);
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('Xác nhận'),
+              child: AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                      color: theme.brightness == Brightness.light
+                          ? AppColors.error
+                          : AppColors.error.withOpacity(0.8),
+                      size: 24),
+                    const SizedBox(width: 12),
+                    const Text('Xác nhận báo lỗi'),
+                  ],
+                ),
+                content: const Text('Bạn có chắc chắn muốn báo lỗi thiết bị này không?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => setState(() => _confirmDialogOpen = false),
+                    style: TextButton.styleFrom(
+                      foregroundColor: theme.brightness == Brightness.light
+                          ? Colors.grey[700]
+                          : Colors.grey[300],
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('Hủy'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      widget.onConfirm(_reasonController.text, _imageUrl);
+                      setState(() => _confirmDialogOpen = false);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      shadowColor: AppColors.shadowColor,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('Xác nhận'),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
       ],
     );

@@ -1,11 +1,11 @@
 {
-    "name": "myapp",
-    "short_name": "myapp",
+    "name": "SmartNet QR Scanner",
+    "short_name": "SmartNet QR",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1976D2",
+    "theme_color": "#1976D2",
+    "description": "SmartNet QR Scanner - Quản lý sản xuất thông minh",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

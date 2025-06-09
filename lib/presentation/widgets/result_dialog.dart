@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:smart_net_qr_scanner/utils/app_colors.dart';
 
 class ResultDialog extends StatelessWidget {
   final String type;
@@ -227,6 +228,8 @@ class ResultDialog extends StatelessWidget {
   }
 
   Widget _buildActions(BuildContext context, bool isSuccess, List<String> actionsList) {
+    final theme = Theme.of(context);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -244,7 +247,12 @@ class ResultDialog extends StatelessWidget {
                 // Always enable the retry button regardless of loading state
                 onPressed: onRetry ?? onClose,
                 style: TextButton.styleFrom(
-                  foregroundColor: Colors.grey[700],
+                  foregroundColor: theme.brightness == Brightness.light
+                      ? AppColors.primary
+                      : AppColors.accent,
+                  backgroundColor: theme.brightness == Brightness.light
+                      ? Colors.grey[200]
+                      : Colors.grey[800],
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -253,7 +261,9 @@ class ResultDialog extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.refresh, size: 20, color: Colors.grey[700]),
+                    Icon(Icons.refresh, size: 20, color: theme.brightness == Brightness.light
+                        ? AppColors.primary
+                        : AppColors.accent),
                     const SizedBox(width: 8),
                     const Text('Quét lại'),
                   ],
@@ -272,9 +282,17 @@ class ResultDialog extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: (isApiLoading || isBluetoothLoading) ? null : onSubmit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  disabledBackgroundColor: Colors.blue.withOpacity(0.6),
+                  disabledBackgroundColor: theme.brightness == Brightness.light
+                      ? AppColors.primary.withOpacity(0.5)
+                      : AppColors.primary.withOpacity(0.3),
+                  disabledForegroundColor: theme.brightness == Brightness.light
+                      ? AppColors.onPrimary.withOpacity(0.6)
+                      : AppColors.onPrimary.withOpacity(0.4),
+                  elevation: 2,
+                  shadowColor: AppColors.shadowColor,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -292,7 +310,7 @@ class ResultDialog extends StatelessWidget {
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white.withOpacity(0.8),
+                                AppColors.onPrimary.withOpacity(0.8),
                               ),
                             ),
                           ),
@@ -304,7 +322,7 @@ class ResultDialog extends StatelessWidget {
                                     ? 'Đang gửi API...'
                                     : 'Đang kết nối...',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
+                              color: AppColors.onPrimary.withOpacity(0.8),
                             ),
                           ),
                         ],
@@ -334,8 +352,11 @@ class ResultDialog extends StatelessWidget {
                 // Always enable the dashboard button regardless of loading state
                 onPressed: onDashboard,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isSuccess ? Colors.green : Colors.red,
+                  backgroundColor: isSuccess ? AppColors.success : AppColors.error,
+                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 12),
+                  elevation: 2,
+                  shadowColor: AppColors.shadowColor,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
