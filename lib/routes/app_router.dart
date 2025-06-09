@@ -139,28 +139,19 @@ class AppRouter {
           TokenExpiryWarning(
             child: Scaffold(
               appBar: CustomAppBar(
-                title: 'Quét mã QR',
+                title: _getPurposeTitle(purpose), // Use a helper method to get proper title
                 showThemeSwitch: false,
                 automaticallyImplyLeading: true, // Show back button
                 onBackPressed: () {
                   context.read<DashboardBloc>().add(const SelectFunction(''));
                   Navigator.of(context).pop(); // Use pop to go back to previous screen
                 },
-                actions: [
-                  IconButton(
-                    onPressed: () {
-                      context.read<DashboardBloc>().add(const SelectFunction(''));
-                      Navigator.of(context).pop();
-                    },
-                    icon: const Icon(Icons.close, color: Colors.white),
-                  ),
-                ],
               ),
               body: QRScannerScreen(
                 purpose: purpose,
                 onBack: () {
                   context.read<DashboardBloc>().add(const SelectFunction(''));
-                  Navigator.of(context).pop(); // Use pop to go back to previous screen
+                  Navigator.of(context).pop();
                 },
               ),
             ),
@@ -270,4 +261,16 @@ class AppRouter {
 
   static final GlobalKey<NavigatorState> _globalNavigatorKey = GlobalKey<NavigatorState>();
   static GlobalKey<NavigatorState> get globalNavigatorKey => _globalNavigatorKey;
+
+  // Helper method to get the title based on the purpose
+  static String _getPurposeTitle(String purpose) {
+    switch (purpose) {
+      case 'scan':
+        return 'Quét mã QR';
+      case 'generate':
+        return 'Tạo mã QR';
+      default:
+        return 'QR Scanner';
+    }
+  }
 }

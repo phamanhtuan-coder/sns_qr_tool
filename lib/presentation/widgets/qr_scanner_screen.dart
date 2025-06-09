@@ -22,7 +22,7 @@ class QRScannerScreen extends StatefulWidget {
   _QRScannerScreenState createState() => _QRScannerScreenState();
 }
 
-class _QRScannerScreenState extends State<QRScannerScreen> {
+class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProviderStateMixin {
   bool _isDeviceSupported = false;
   bool _isScanning = true;
   bool _isSubmitting = false;
@@ -240,175 +240,131 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        _safePop();
-        return false;
-      },
-      child: BlocProvider.value(
-        value: _scannerBloc,
-        child: Theme(
-          data: Theme.of(context).copyWith(
-            scaffoldBackgroundColor: Colors.black,
-            appBarTheme: AppBarTheme(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              iconTheme: const IconThemeData(color: Colors.white),
-              titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
+    return BlocProvider.value(
+      value: _scannerBloc,
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          scaffoldBackgroundColor: Colors.black,
+        ),
+        child: Stack(
+          children: [
+            if (_isDeviceSupported && _isScanning)
+              MobileScanner(
+                controller: _controller,
+                onDetect: _handleDetection,
+                errorBuilder: (context, error, child) {
+                  _handleError(error);
+                  return const SizedBox.shrink();
+                },
+              ),
+            QROverlay(isScanning: _isScanning),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Colors.black87, Colors.transparent],
+                  ),
+                ),
+                child: Text(
+                  _isScanning ? 'Đặt mã QR vào khung để quét' : 'Quét tạm dừng. Nhấn "Thử lại" để tiếp tục.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ),
             ),
-          ),
-          child: Scaffold(
-            body: Stack(
-              children: [
-                if (_isDeviceSupported && _isScanning)
-                  MobileScanner(
-                    controller: _controller,
-                    onDetect: _handleDetection,
-                    errorBuilder: (context, error, child) {
-                      _handleError(error);
-                      return const SizedBox.shrink();
+            BlocBuilder<ScannerBloc, ScannerState>(
+              bloc: _scannerBloc,
+              builder: (context, state) {
+                if (state is ScannerSuccess) {
+                  final Map<String, dynamic> details = Map<String, dynamic>.from(state.result['details']);
+                  final actions = state.result['actions'] as List<dynamic>? ?? [];
+                  final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
+
+                  print("DEBUG: Showing success dialog with actions: $actions");
+                  print("DEBUG: Success details: $details");
+
+                  return ResultDialog(
+                    type: 'success',
+                    title: state.result['title'] as String,
+                    message: state.result['message'] as String,
+                    details: details.map((key, value) => MapEntry(key, value.toString())),
+                    actions: actions.map((e) => e.toString()).toList(),
+                    isLoading: _isSubmitting,
+                    onSubmit: actions.contains('submit')
+                        ? () {
+                            print("DEBUG: Submit button pressed with serial: $serial");
+                            _handleSubmit(serial);
+                      }
+                        : null,
+                    onRetry: actions.contains('retry')
+                        ? () {
+                            print("DEBUG: Retry button pressed");
+                            _retryScanning();
+                      }
+                        : null,
+                    onDashboard: actions.contains('dashboard')
+                        ? () {
+                            print("DEBUG: Dashboard button pressed");
+                            _safePop();
+                      }
+                        : null,
+                    onClose: () {
+                      print("DEBUG: Dialog close button pressed - restarting scanner");
+                      // When dialog is dismissed, restart scanning like retry button
+                      _retryScanning();
                     },
-                  ),
-                QROverlay(isScanning: _isScanning),
-                SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: _safePop,
-                        ),
-                        const SizedBox(width: 16),
-                        Text(
-                          _getPurposeTitle(widget.purpose),
-                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [Colors.black87, Colors.transparent],
-                      ),
-                    ),
-                    child: Text(
-                      _isScanning ? 'Đặt mã QR vào khung để quét' : 'Quét tạm dừng. Nhấn "Thử lại" để tiếp tục.',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                    ),
-                  ),
-                ),
-                BlocBuilder<ScannerBloc, ScannerState>(
-                  bloc: _scannerBloc,
-                  builder: (context, state) {
-                    if (state is ScannerSuccess) {
-                      final Map<String, dynamic> details = Map<String, dynamic>.from(state.result['details']);
-                      final actions = state.result['actions'] as List<dynamic>? ?? [];
-                      final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
+                  );
+                } else if (state is ScannerFailure) {
+                  final Map<String, dynamic> details = Map<String, dynamic>.from(state.error['details'] ?? {});
+                  final actions = state.error['details']['actions'] as List<dynamic>? ?? [];
+                  final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
 
-                      print("DEBUG: Showing success dialog with actions: $actions");
-                      print("DEBUG: Success details: $details");
+                  print("DEBUG: Showing failure dialog with actions: $actions");
 
-                      return ResultDialog(
-                        type: 'success',
-                        title: state.result['title'] as String,
-                        message: state.result['message'] as String,
-                        details: details.map((key, value) => MapEntry(key, value.toString())),
-                        actions: actions.map((e) => e.toString()).toList(),
-                        isLoading: _isSubmitting,
-                        onSubmit: actions.contains('submit')
-                            ? () {
-                                print("DEBUG: Submit button pressed with serial: $serial");
-                                _handleSubmit(serial);
-                          }
-                            : null,
-                        onRetry: actions.contains('retry')
-                            ? () {
-                                print("DEBUG: Retry button pressed");
-                                _retryScanning();
-                          }
-                            : null,
-                        onDashboard: actions.contains('dashboard')
-                            ? () {
-                                print("DEBUG: Dashboard button pressed");
-                                _safePop();
-                          }
-                            : null,
-                        onClose: () {
-                          print("DEBUG: Dialog close button pressed - restarting scanner");
-                          // When dialog is dismissed, restart scanning like retry button
-                          _retryScanning();
-                        },
-                      );
-                    } else if (state is ScannerFailure) {
-                      final Map<String, dynamic> details = Map<String, dynamic>.from(state.error['details'] ?? {});
-                      final actions = state.error['actions'] as List<dynamic>? ?? [];
-                      final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
-
-                      print("DEBUG: Showing failure dialog with actions: $actions");
-
-                      return ResultDialog(
-                        type: 'error',
-                        title: state.error['title'] as String,
-                        message: state.error['message'] as String,
-                        details: details.map((key, value) => MapEntry(key, value.toString())),
-                        actions: actions.map((e) => e.toString()).toList(),
-                        isLoading: _isSubmitting,
-                        onSubmit: actions.contains('submit')
-                            ? () {
-                                print("DEBUG: Submit button pressed with serial: $serial");
-                                _handleSubmit(serial);
-                          }
-                            : null,
-                        onRetry: actions.contains('retry')
-                            ? () {
-                                print("DEBUG: Retry button pressed");
-                                _retryScanning();
-                          }
-                            : null,
-                        onDashboard: actions.contains('dashboard')
-                            ? () {
-                                print("DEBUG: Dashboard button pressed");
-                                _safePop();
-                          }
-                            : null,
-                        onClose: () {
-                          print("DEBUG: Dialog close button pressed - restarting scanner");
-                          // When dialog is dismissed, restart scanning like retry button
-                          _retryScanning();
-                        },
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
-              ],
+                  return ResultDialog(
+                    type: 'error',
+                    title: state.error['title'] as String,
+                    message: state.error['message'] as String,
+                    details: details.map((key, value) => MapEntry(key, value.toString())),
+                    actions: actions.map((e) => e.toString()).toList(),
+                    isLoading: _isSubmitting,
+                    onSubmit: actions.contains('submit')
+                        ? () {
+                            print("DEBUG: Submit button pressed with serial: $serial");
+                            _handleSubmit(serial);
+                      }
+                        : null,
+                    onRetry: actions.contains('retry')
+                        ? () {
+                            print("DEBUG: Retry button pressed");
+                            _retryScanning();
+                      }
+                        : null,
+                    onDashboard: actions.contains('dashboard')
+                        ? () {
+                            print("DEBUG: Dashboard button pressed");
+                            _safePop();
+                      }
+                        : null,
+                    onClose: () {
+                      print("DEBUG: Dialog close button pressed - restarting scanner");
+                      // When dialog is dismissed, restart scanning like retry button
+                      _retryScanning();
+                    },
+                  );
+                }
+                return const SizedBox.shrink();
+              },
             ),
-          ),
+          ],
         ),
       ),
     );
-  }
-
-  String _getPurposeTitle(String purpose) {
-    const titles = {
-      'identify': 'Quét để xác định thiết bị',
-      'firmware': 'Quét để cập nhật Firmware',
-      'testing': 'Quét để kiểm tra thiết bị',
-      'packaging': 'Quét để đóng gói thiết bị',
-      'stockin': 'Quét để nhập kho',
-      'stockout': 'Quét để xuất kho',
-    };
-    return titles[purpose] ?? 'Quét mã QR';
   }
 }
