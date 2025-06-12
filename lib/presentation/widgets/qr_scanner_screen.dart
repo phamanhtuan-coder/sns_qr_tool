@@ -257,7 +257,10 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
                   return const SizedBox.shrink();
                 },
               ),
-            QROverlay(isScanning: _isScanning),
+            QROverlay(
+              isScanning: _isScanning,
+              purpose: widget.purpose,
+            ),
             Positioned(
               bottom: 0,
               left: 0,

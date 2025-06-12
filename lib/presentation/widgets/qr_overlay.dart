@@ -2,8 +2,26 @@ import 'package:flutter/material.dart';
 
 class QROverlay extends StatefulWidget {
   final bool isScanning;
+  final String purpose; // Add purpose parameter
 
-  const QROverlay({super.key, required this.isScanning});
+  const QROverlay({
+    super.key,
+    required this.isScanning,
+    required this.purpose, // Add required purpose
+  });
+
+  // Helper method to get stage info
+  static Map<String, dynamic> getPurposeInfo(String purpose) {
+    final stages = {
+      'identify': {'number': 1, 'name': 'Xác định thiết bị'},
+      'firmware': {'number': 2, 'name': 'Cập nhật Firmware'},
+      'testing': {'number': 3, 'name': 'Kiểm tra thiết bị'},
+      'packaging': {'number': 4, 'name': 'Đóng gói thiết bị'},
+      'stockin': {'number': 5, 'name': 'Nhập kho'},
+      'stockout': {'number': 6, 'name': 'Xuất kho'},
+    };
+    return stages[purpose] ?? {'number': 0, 'name': 'Không xác định'};
+  }
 
   @override
   _QROverlayState createState() => _QROverlayState();
@@ -62,9 +80,61 @@ class _QROverlayState extends State<QROverlay> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    final purposeInfo = QROverlay.getPurposeInfo(widget.purpose);
+    final stageNumber = purposeInfo['number'];
+    final stageName = purposeInfo['name'];
+
     return Stack(
       children: [
         Container(color: Colors.black.withOpacity(0.7)),
+        // Add stage info at the top
+        Positioned(
+          top: 16,
+          left: 0,
+          right: 0,
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                margin: const EdgeInsets.symmetric(horizontal: 32),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '$stageNumber',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      stageName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
         Center(
           child: SizedBox(
             width: 256,
@@ -96,7 +166,7 @@ class _QROverlayState extends State<QROverlay> with SingleTickerProviderStateMix
                   right: 0,
                   child: Container(width: 32, height: 32, decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.blue, width: 4), right: BorderSide(color: Colors.blue, width: 4)))),
                 ),
-                if (_isAnimationRunning)
+                if (widget.isScanning && _isAnimationRunning)
                   AnimatedBuilder(
                     animation: _animation,
                     builder: (context, child) {
