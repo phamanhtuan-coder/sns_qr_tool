@@ -223,3 +223,4 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
     return super.close();
   }
 }
+

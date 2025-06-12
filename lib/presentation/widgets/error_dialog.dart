@@ -6,12 +6,14 @@ class ErrorDialog extends StatefulWidget {
   final Device device;
   final VoidCallback onClose;
   final Function(String, String?) onConfirm;
+  final bool isLoading; // Add loading state
 
   const ErrorDialog({
     super.key,
     required this.device,
     required this.onClose,
     required this.onConfirm,
+    this.isLoading = false, // Add default value
   });
 
   @override
@@ -22,6 +24,67 @@ class _ErrorDialogState extends State<ErrorDialog> {
   final _reasonController = TextEditingController();
   String? _imageUrl;
   bool _confirmDialogOpen = false;
+
+  Widget _buildActions() {
+    final theme = Theme.of(context);
+    final isTextEmpty = _reasonController.text.trim().isEmpty;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        TextButton(
+          onPressed: widget.onClose,
+          style: TextButton.styleFrom(
+            foregroundColor: theme.brightness == Brightness.light
+                ? Colors.grey[700]
+                : Colors.grey[300],
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: const Text('Hủy'),
+        ),
+        const SizedBox(width: 16),
+        ElevatedButton.icon(
+          onPressed: isTextEmpty || widget.isLoading
+              ? null
+              : () => setState(() => _confirmDialogOpen = true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.error,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: theme.brightness == Brightness.light
+                ? AppColors.error.withOpacity(0.5)
+                : AppColors.error.withOpacity(0.3),
+            disabledForegroundColor: theme.brightness == Brightness.light
+                ? Colors.white70
+                : Colors.white54,
+            elevation: 2,
+            shadowColor: AppColors.shadowColor,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          icon: widget.isLoading
+              ? SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      theme.brightness == Brightness.light
+                          ? Colors.white70
+                          : Colors.white54,
+                    ),
+                  ),
+                )
+              : const Icon(Icons.report_problem, size: 18),
+          label: Text(widget.isLoading ? 'Đang xử lý...' : 'Báo lỗi'),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -137,48 +200,7 @@ class _ErrorDialogState extends State<ErrorDialog> {
                         label: const Text('Tải ảnh lên'),
                       ),
                       const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: widget.onClose,
-                            style: TextButton.styleFrom(
-                              foregroundColor: theme.brightness == Brightness.light
-                                  ? Colors.grey[700]
-                                  : Colors.grey[300],
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: const Text('Hủy'),
-                          ),
-                          const SizedBox(width: 16),
-                          ElevatedButton.icon(
-                            onPressed: isTextEmpty
-                                ? null
-                                : () => setState(() => _confirmDialogOpen = true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.error,
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor: theme.brightness == Brightness.light
-                                  ? AppColors.error.withOpacity(0.5)
-                                  : AppColors.error.withOpacity(0.3),
-                              disabledForegroundColor: theme.brightness == Brightness.light
-                                  ? Colors.white70
-                                  : Colors.white54,
-                              elevation: 2,
-                              shadowColor: AppColors.shadowColor,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            icon: const Icon(Icons.report_problem, size: 18),
-                            label: const Text('Báo lỗi'),
-                          ),
-                        ],
-                      ),
+                      _buildActions(),
                     ],
                   ),
                 ),
@@ -219,7 +241,7 @@ class _ErrorDialogState extends State<ErrorDialog> {
                 content: const Text('Bạn có chắc chắn muốn báo lỗi thiết bị này không?'),
                 actions: [
                   TextButton(
-                    onPressed: () => setState(() => _confirmDialogOpen = false),
+                    onPressed: widget.isLoading ? null : () => setState(() => _confirmDialogOpen = false),
                     style: TextButton.styleFrom(
                       foregroundColor: theme.brightness == Brightness.light
                           ? Colors.grey[700]
@@ -232,13 +254,19 @@ class _ErrorDialogState extends State<ErrorDialog> {
                     child: const Text('Hủy'),
                   ),
                   ElevatedButton(
-                    onPressed: () {
+                    onPressed: widget.isLoading ? null : () {
                       widget.onConfirm(_reasonController.text, _imageUrl);
-                      setState(() => _confirmDialogOpen = false);
+                      // Don't close dialog immediately, let parent handle it based on API response
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.error,
                       foregroundColor: Colors.white,
+                      disabledBackgroundColor: theme.brightness == Brightness.light
+                          ? AppColors.error.withOpacity(0.5)
+                          : AppColors.error.withOpacity(0.3),
+                      disabledForegroundColor: theme.brightness == Brightness.light
+                          ? Colors.white70
+                          : Colors.white54,
                       elevation: 2,
                       shadowColor: AppColors.shadowColor,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -246,7 +274,28 @@ class _ErrorDialogState extends State<ErrorDialog> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: const Text('Xác nhận'),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (widget.isLoading)
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                theme.brightness == Brightness.light
+                                    ? Colors.white70
+                                    : Colors.white54,
+                              ),
+                            ),
+                          )
+                        else
+                          const Icon(Icons.check_circle, size: 16),
+                        const SizedBox(width: 8),
+                        Text(widget.isLoading ? 'Đang xử lý...' : 'Xác nhận'),
+                      ],
+                    ),
                   ),
                 ],
               ),

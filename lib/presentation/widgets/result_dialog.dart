@@ -41,6 +41,9 @@ class ResultDialog extends StatelessWidget {
     final isSuccess = type == 'success';
     final formattedDetails = _formatDetails();
     final hasErrors = apiError != null || bluetoothError != null;
+    // Modify loading state to stop when success details include sent_to_desktop
+    final isAnyLoading = (isLoading || isApiLoading || isBluetoothLoading) &&
+        !(details['sent_to_desktop'] == 'Thành công');
 
     return Stack(
       children: [
@@ -79,6 +82,44 @@ class ResultDialog extends StatelessWidget {
             ),
           ),
         ),
+        // Add loading overlay
+        if (isAnyLoading)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.3),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(
+                        isApiLoading && isBluetoothLoading
+                            ? 'Đang xử lý...'
+                            : isApiLoading
+                                ? 'Đang gửi API...'
+                                : 'Đang kết nối Bluetooth...',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -227,8 +268,65 @@ class ResultDialog extends StatelessWidget {
     );
   }
 
+  Widget _buildLoadingButton({
+    required BuildContext context,
+    required bool isLoading,
+    required String loadingText,
+    required String normalText,
+    required VoidCallback? onPressed,
+    required Color backgroundColor,
+    required IconData icon,
+  }) {
+    final theme = Theme.of(context);
+
+    return ElevatedButton(
+      onPressed: isLoading ? null : onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: backgroundColor,
+        foregroundColor: AppColors.onPrimary,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        disabledBackgroundColor: theme.brightness == Brightness.light
+            ? backgroundColor.withOpacity(0.5)
+            : backgroundColor.withOpacity(0.3),
+        disabledForegroundColor: theme.brightness == Brightness.light
+            ? AppColors.onPrimary.withOpacity(0.6)
+            : AppColors.onPrimary.withOpacity(0.4),
+        elevation: 2,
+        shadowColor: AppColors.shadowColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (isLoading)
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppColors.onPrimary.withOpacity(0.8),
+                ),
+              ),
+            )
+          else
+            Icon(icon, size: 20),
+          const SizedBox(width: 8),
+          Text(isLoading ? loadingText : normalText),
+        ],
+      ),
+    );
+  }
+
   Widget _buildActions(BuildContext context, bool isSuccess, List<String> actionsList) {
     final theme = Theme.of(context);
+    final hasApiError = apiError != null;
+    final hasBluetoothError = bluetoothError != null;
+    // Update loading state check to include the success condition
+    final isAnyLoading = (isApiLoading || isBluetoothLoading) &&
+        !(details['sent_to_desktop'] == 'Thành công');
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -244,8 +342,7 @@ class ResultDialog extends StatelessWidget {
           if (actionsList.contains('retry'))
             Expanded(
               child: TextButton(
-                // Always enable the retry button regardless of loading state
-                onPressed: onRetry ?? onClose,
+                onPressed: isAnyLoading ? null : (onRetry ?? onClose),
                 style: TextButton.styleFrom(
                   foregroundColor: theme.brightness == Brightness.light
                       ? AppColors.primary
@@ -279,65 +376,18 @@ class ResultDialog extends StatelessWidget {
           // Nút Xác nhận (submit)
           if (actionsList.contains('submit'))
             Expanded(
-              child: ElevatedButton(
-                onPressed: (isApiLoading || isBluetoothLoading) ? null : onSubmit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  disabledBackgroundColor: theme.brightness == Brightness.light
-                      ? AppColors.primary.withOpacity(0.5)
-                      : AppColors.primary.withOpacity(0.3),
-                  disabledForegroundColor: theme.brightness == Brightness.light
-                      ? AppColors.onPrimary.withOpacity(0.6)
-                      : AppColors.onPrimary.withOpacity(0.4),
-                  elevation: 2,
-                  shadowColor: AppColors.shadowColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (isApiLoading || isBluetoothLoading)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                AppColors.onPrimary.withOpacity(0.8),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            isApiLoading && isBluetoothLoading
-                                ? 'Đang xử lý...'
-                                : isApiLoading
-                                    ? 'Đang gửi API...'
-                                    : 'Đang kết nối...',
-                            style: TextStyle(
-                              color: AppColors.onPrimary.withOpacity(0.8),
-                            ),
-                          ),
-                        ],
-                      )
-                    else
-                      const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.check_circle, size: 20),
-                          SizedBox(width: 8),
-                          Text('Xác nhận'),
-                        ],
-                      ),
-                  ],
-                ),
+              child: _buildLoadingButton(
+                context: context,
+                isLoading: isApiLoading || isBluetoothLoading,
+                loadingText: isApiLoading && isBluetoothLoading
+                    ? 'Đang xử lý...'
+                    : isApiLoading
+                        ? 'Đang gửi API...'
+                        : 'Đang kết nối...',
+                normalText: 'Xác nhận',
+                onPressed: hasApiError || hasBluetoothError ? null : onSubmit,
+                backgroundColor: AppColors.primary,
+                icon: Icons.check_circle,
               ),
             ),
 
@@ -348,27 +398,14 @@ class ResultDialog extends StatelessWidget {
           // Nút Quay về (dashboard) - now in a separate if condition, not an else if
           if (actionsList.contains('dashboard'))
             Expanded(
-              child: ElevatedButton(
-                // Always enable the dashboard button regardless of loading state
+              child: _buildLoadingButton(
+                context: context,
+                isLoading: false, // Dashboard button is never in loading state
+                loadingText: '',
+                normalText: 'Quay về',
                 onPressed: onDashboard,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isSuccess ? AppColors.success : AppColors.error,
-                  foregroundColor: AppColors.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  elevation: 2,
-                  shadowColor: AppColors.shadowColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.home, size: 20),
-                    SizedBox(width: 8),
-                    Text('Quay về'),
-                  ],
-                ),
+                backgroundColor: isSuccess ? AppColors.success : AppColors.error,
+                icon: Icons.home,
               ),
             ),
         ],
