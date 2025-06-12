@@ -276,6 +276,7 @@ class Dashboard extends StatelessWidget {
                                 Padding(
                                   padding: const EdgeInsets.all(16),
                                   child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
@@ -291,8 +292,6 @@ class Dashboard extends StatelessWidget {
                                           fontWeight: FontWeight.w600,
                                           color: Colors.white,
                                         ),
-                                        textAlign: TextAlign.center,
-                                        maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                       const SizedBox(height: 4),
@@ -302,8 +301,6 @@ class Dashboard extends StatelessWidget {
                                           fontSize: 12,
                                           color: _withOpacity(Colors.white, 0.9),
                                         ),
-                                        textAlign: TextAlign.center,
-                                        maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ],
