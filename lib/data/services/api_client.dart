@@ -71,6 +71,31 @@ class ApiClient {
     }
   }
 
+  // Make a logout request to the server
+  Future<bool> logout() async {
+    try {
+      final token = await getAccessToken();
+      if (token == null) {
+        print('DEBUG: No token found for logout');
+        return true; // Consider it successful if there's no token to invalidate
+      }
+
+      final url = Uri.parse('${_baseUrl}/auth/employee/logout');
+      final response = await _client.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(_timeout);
+
+      print('DEBUG: Logout response status: ${response.statusCode}');
+      return response.statusCode == 204;
+    } catch (e) {
+      print('DEBUG: Error during logout request: $e');
+      return false;
+    }
+  }
+
   // Store access token
   Future<void> setAccessToken(String? token) async {
     try {

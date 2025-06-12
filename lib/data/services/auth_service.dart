@@ -298,19 +298,33 @@ class AuthService {
   }
 
   /// Log the user out by clearing stored credentials
-  Future<bool> logout() async {
+  Future<void> logout() async {
+    print('DEBUG: AuthService.logout called');
     try {
-      // Cancel token expiry timer
-      _tokenExpiryTimer?.cancel();
+      // Call server logout endpoint first
+      final logoutSuccessful = await _apiClient.logout();
+      print('DEBUG: Server logout ${logoutSuccessful ? 'successful' : 'failed'}');
 
-      await _apiClient.setUsername(null);
+      // Clear token expiry timer
+      _tokenExpiryTimer?.cancel();
+      _tokenExpiryTimer = null;
+
+      // Clear stored credentials
       await _apiClient.setAccessToken(null);
+      await _apiClient.setUsername(null);
+
+      // Clear user data
       _user = null;
-      print('DEBUG: User logged out successfully');
-      return true;
+
+      print('DEBUG: Local logout completed');
     } catch (e) {
       print('DEBUG: Error during logout: $e');
-      return false;
+      // Still clear local data even if server request fails
+      _tokenExpiryTimer?.cancel();
+      _tokenExpiryTimer = null;
+      await _apiClient.setAccessToken(null);
+      await _apiClient.setUsername(null);
+      _user = null;
     }
   }
 
