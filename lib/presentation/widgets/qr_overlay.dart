@@ -29,7 +29,8 @@ class QROverlay extends StatefulWidget {
 
 class _QROverlayState extends State<QROverlay> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
+  late Animation<double> _scanAnimation;
+  late Animation<double> _pulseAnimation;
   bool _isAnimationRunning = false;
 
   @override
@@ -39,8 +40,11 @@ class _QROverlayState extends State<QROverlay> with SingleTickerProviderStateMix
       vsync: this,
       duration: const Duration(seconds: 2),
     );
-    _animation = Tween<double>(begin: 0, end: 256).animate(
+    _scanAnimation = Tween<double>(begin: 0, end: 256).animate(
       CurvedAnimation(parent: _controller, curve: Curves.linear),
+    );
+    _pulseAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
     if (widget.isScanning) {
       _startAnimation();
@@ -50,13 +54,7 @@ class _QROverlayState extends State<QROverlay> with SingleTickerProviderStateMix
   void _startAnimation() {
     if (_isAnimationRunning) return;
     _isAnimationRunning = true;
-    _controller.repeat();
-    Future.delayed(const Duration(seconds: 10), () {
-      if (mounted && _isAnimationRunning) {
-        _controller.stop();
-        _isAnimationRunning = false;
-      }
-    });
+    _controller.repeat(reverse: true);
   }
 
   @override
@@ -99,8 +97,15 @@ class _QROverlayState extends State<QROverlay> with SingleTickerProviderStateMix
                 margin: const EdgeInsets.symmetric(horizontal: 32),
                 decoration: BoxDecoration(
                   color: Colors.blue.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.2),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -110,6 +115,13 @@ class _QROverlayState extends State<QROverlay> with SingleTickerProviderStateMix
                       decoration: BoxDecoration(
                         color: Colors.blue.withOpacity(0.3),
                         shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blue.withOpacity(0.3),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
+                        ],
                       ),
                       child: Text(
                         '$stageNumber',
@@ -136,50 +148,157 @@ class _QROverlayState extends State<QROverlay> with SingleTickerProviderStateMix
           ),
         ),
         Center(
-          child: SizedBox(
-            width: 256,
-            height: 256,
-            child: Stack(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
-                  ),
-                ),
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  child: Container(width: 32, height: 32, decoration: const BoxDecoration(border: Border(top: BorderSide(color: Colors.blue, width: 4), left: BorderSide(color: Colors.blue, width: 4)))),
-                ),
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(width: 32, height: 32, decoration: const BoxDecoration(border: Border(top: BorderSide(color: Colors.blue, width: 4), right: BorderSide(color: Colors.blue, width: 4)))),
-                ),
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  child: Container(width: 32, height: 32, decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.blue, width: 4), left: BorderSide(color: Colors.blue, width: 4)))),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(width: 32, height: 32, decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.blue, width: 4), right: BorderSide(color: Colors.blue, width: 4)))),
-                ),
-                if (widget.isScanning && _isAnimationRunning)
-                  AnimatedBuilder(
-                    animation: _animation,
-                    builder: (context, child) {
-                      return Positioned(
-                        top: _animation.value,
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              return SizedBox(
+                width: 256,
+                height: 256,
+                child: Stack(
+                  children: [
+                    // QR Frame base
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blue.withOpacity(0.15),
+                            blurRadius: 12,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Animated corners
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      child: Opacity(
+                        opacity: _pulseAnimation.value,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            border: const Border(
+                              top: BorderSide(color: Colors.blue, width: 4),
+                              left: BorderSide(color: Colors.blue, width: 4)
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.withOpacity(0.4),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          )
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Opacity(
+                        opacity: _pulseAnimation.value,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            border: const Border(
+                              top: BorderSide(color: Colors.blue, width: 4),
+                              right: BorderSide(color: Colors.blue, width: 4)
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.withOpacity(0.4),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          )
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      child: Opacity(
+                        opacity: _pulseAnimation.value,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            border: const Border(
+                              bottom: BorderSide(color: Colors.blue, width: 4),
+                              left: BorderSide(color: Colors.blue, width: 4)
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.withOpacity(0.4),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          )
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Opacity(
+                        opacity: _pulseAnimation.value,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            border: const Border(
+                              bottom: BorderSide(color: Colors.blue, width: 4),
+                              right: BorderSide(color: Colors.blue, width: 4)
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.withOpacity(0.4),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          )
+                        ),
+                      ),
+                    ),
+                    // Scan line animation
+                    if (widget.isScanning && _isAnimationRunning)
+                      Positioned(
+                        top: _scanAnimation.value,
                         left: 0,
                         right: 0,
-                        child: Container(height: 2, color: Colors.blue),
-                      );
-                    },
-                  ),
-              ],
-            ),
+                        child: Container(
+                          height: 2,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.blue.withOpacity(0.0),
+                                Colors.blue.withOpacity(0.8),
+                                Colors.blue,
+                                Colors.blue.withOpacity(0.8),
+                                Colors.blue.withOpacity(0.0),
+                              ],
+                              stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.withOpacity(0.6),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ],
