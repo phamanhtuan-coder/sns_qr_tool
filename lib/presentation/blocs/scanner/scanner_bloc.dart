@@ -67,7 +67,9 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           'title': 'Quét thành công',
           'message': 'Đã quét thiết bị thành công',
           'details': {'device_serial': event.data},
-          'actions': const ['retry', 'submit'],
+          'actions': event.purpose == 'firmware'
+              ? const ['retry', 'submit', 'send_to_device']  // Include send_to_device for firmware mode
+              : const ['retry', 'submit'],
         }));
       } catch (e, stackTrace) {
         print("DEBUG: Exception in SubmitScan handler: $e");
@@ -285,6 +287,9 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
             },
             'actions': const ['retry', 'dashboard'],
           },
+          // Explicitly set loading states to false on success
+          isApiLoading: false,
+          isBluetoothLoading: false,
         ));
       } else {
         // Partial success or complete failure

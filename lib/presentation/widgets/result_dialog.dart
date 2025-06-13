@@ -1,24 +1,27 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:smart_net_qr_scanner/routes/app_router.dart';
 import 'package:smart_net_qr_scanner/utils/app_colors.dart';
 
-class ResultDialog extends StatelessWidget {
+class ResultDialog extends StatefulWidget {
   final String type;
   final String title;
   final String message;
   final Map<String, String> details;
   final List<String> actions;
   final VoidCallback onClose;
-  final VoidCallback? onSubmit; // Callback cho nút Cập nhật trạng thái
-  final VoidCallback? onRetry; // Callback cho nút Quét lại
-  final VoidCallback? onDashboard; // Callback cho nút Quay về/Dashboard
-  final VoidCallback? onSendToDevice; // Callback mới cho nút Gửi tới thiết bị
+  final VoidCallback? onSubmit;
+  final VoidCallback? onRetry;
+  final VoidCallback? onDashboard;
+  final VoidCallback? onSendToDevice;
   final bool isLoading;
   final bool isApiLoading;
   final bool isBluetoothLoading;
   final String? apiError;
   final String? bluetoothError;
-  final String? currentMode; // Để xác định mode hiện tại (firmware là mode 2)
+  final String? currentMode;
 
   const ResultDialog({
     super.key,
@@ -40,22 +43,83 @@ class ResultDialog extends StatelessWidget {
     this.currentMode,
   });
 
+  @override
+  State<ResultDialog> createState() => _ResultDialogState();
+}
+
+class _ResultDialogState extends State<ResultDialog> {
+  bool _isApiLoading = false;
+  bool _isBluetoothLoading = false;
+  Timer? _loadingTimeoutTimer;
+
   // Kiểm tra xem hiện tại có phải là mode firmware không
-  bool get isFirmwareMode => currentMode == 'firmware';
+  bool get isFirmwareMode => widget.currentMode == 'firmware';
+
+  @override
+  void initState() {
+    super.initState();
+    _isApiLoading = widget.isApiLoading;
+    _isBluetoothLoading = widget.isBluetoothLoading;
+
+    // Set loading timeout timer if buttons are in loading state
+    if (_isApiLoading || _isBluetoothLoading) {
+      _startLoadingTimeout();
+    }
+  }
+
+  @override
+  void didUpdateWidget(ResultDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Update loading states when widget updates
+    if (oldWidget.isApiLoading != widget.isApiLoading ||
+        oldWidget.isBluetoothLoading != widget.isBluetoothLoading) {
+      _isApiLoading = widget.isApiLoading;
+      _isBluetoothLoading = widget.isBluetoothLoading;
+
+      // Reset timeout timer
+      _loadingTimeoutTimer?.cancel();
+      if (_isApiLoading || _isBluetoothLoading) {
+        _startLoadingTimeout();
+      }
+    }
+  }
+
+  void _startLoadingTimeout() {
+    // Cancel existing timer if any
+    _loadingTimeoutTimer?.cancel();
+
+    // Create new 15-second timeout timer
+    _loadingTimeoutTimer = Timer(const Duration(seconds: 15), () {
+      if (mounted) {
+        setState(() {
+          _isApiLoading = false;
+          _isBluetoothLoading = false;
+          print("⚡ DEBUG: Loading timeout occurred - automatically stopping loading state after 15 seconds");
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _loadingTimeoutTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isSuccess = type == 'success';
+    final isSuccess = widget.type == 'success';
     final formattedDetails = _formatDetails();
-    final hasErrors = apiError != null || bluetoothError != null;
-    // Modify loading state to stop when success details include sent_to_desktop
-    final isAnyLoading = (isLoading || isApiLoading || isBluetoothLoading) &&
-        !(details['sent_to_desktop'] == 'Thành công');
+    final hasErrors = widget.apiError != null || widget.bluetoothError != null;
+    // Fix loading state logic to handle both firmware and non-firmware modes
+    final isAnyLoading = (_isApiLoading || _isBluetoothLoading) &&
+        !(widget.details['sent_to_desktop'] == 'Thành công' || (!isFirmwareMode && !_isApiLoading && !_isBluetoothLoading));
 
     return Stack(
       children: [
         GestureDetector(
-          onTap: onClose,
+          onTap: widget.onClose,
           child: Container(color: Colors.black.withAlpha(179)),
         ),
         Center(
@@ -83,7 +147,7 @@ class ResultDialog extends StatelessWidget {
                     _buildDetailsSection(context, formattedDetails),
                   if (hasErrors)
                     _buildErrorSection(context),
-                  _buildActions(context, isSuccess, actions),
+                  _buildActions(context, isSuccess, widget.actions),
                 ],
               ),
             ),
@@ -114,9 +178,9 @@ class ResultDialog extends StatelessWidget {
                       const CircularProgressIndicator(),
                       const SizedBox(height: 16),
                       Text(
-                        isApiLoading && isBluetoothLoading
+                        _isApiLoading && _isBluetoothLoading
                             ? 'Đang xử lý...'
-                            : isApiLoading
+                            : _isApiLoading
                                 ? 'Đang gửi API...'
                                 : 'Đang kết nối Bluetooth...',
                         style: Theme.of(context).textTheme.bodyMedium,
@@ -151,7 +215,7 @@ class ResultDialog extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  widget.title,
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w500,
@@ -160,7 +224,7 @@ class ResultDialog extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  message,
+                  widget.message,
                   style: TextStyle(
                     fontSize: 14,
                     color: isSuccess ? Colors.green.shade700 : Colors.red.shade700,
@@ -171,7 +235,7 @@ class ResultDialog extends StatelessWidget {
           ),
           IconButton(
             icon: const Icon(Icons.close, size: 20),
-            onPressed: onClose,
+            onPressed: widget.onClose,
           ),
         ],
       ),
@@ -241,14 +305,14 @@ class ResultDialog extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (apiError != null) ...[
+          if (widget.apiError != null) ...[
             Row(
               children: [
                 const Icon(Icons.error_outline, color: Colors.red, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'API: $apiError',
+                    'API: ${widget.apiError}',
                     style: const TextStyle(color: Colors.red),
                   ),
                 ),
@@ -256,14 +320,14 @@ class ResultDialog extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
-          if (bluetoothError != null) ...[
+          if (widget.bluetoothError != null) ...[
             Row(
               children: [
                 const Icon(Icons.bluetooth_disabled, color: Colors.red, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Bluetooth: $bluetoothError',
+                    'Bluetooth: ${widget.bluetoothError}',
                     style: const TextStyle(color: Colors.red),
                   ),
                 ),
@@ -329,11 +393,11 @@ class ResultDialog extends StatelessWidget {
 
   Widget _buildActions(BuildContext context, bool isSuccess, List<String> actionsList) {
     final theme = Theme.of(context);
-    final hasApiError = apiError != null;
-    final hasBluetoothError = bluetoothError != null;
-    // Update loading state check to include the success condition
-    final isAnyLoading = (isApiLoading || isBluetoothLoading) &&
-        !(details['sent_to_desktop'] == 'Thành công');
+    final hasApiError = widget.apiError != null;
+    final hasBluetoothError = widget.bluetoothError != null;
+    // Update loading state check to properly handle non-firmware modes
+    final isAnyLoading = (_isApiLoading || _isBluetoothLoading) &&
+        !(widget.details['sent_to_desktop'] == 'Thành công' || (!isFirmwareMode && !_isApiLoading && !_isBluetoothLoading));
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -344,109 +408,110 @@ class ResultDialog extends StatelessWidget {
       ),
       child: Column(
         children: [
+          // First row of buttons
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Nút Quét lại (retry) - luôn hiển thị nếu được kích hoạt
-              if (actionsList.contains('retry'))
-                Expanded(
-                  child: TextButton(
-                    onPressed: isAnyLoading ? null : (onRetry ?? onClose),
-                    style: TextButton.styleFrom(
-                      foregroundColor: theme.brightness == Brightness.light
+              // Button 1: Scan Again (Quét lại) - Always shown
+              Expanded(
+                child: TextButton(
+                  onPressed: isAnyLoading ? null : (widget.onRetry ?? widget.onClose),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.brightness == Brightness.light
+                        ? AppColors.primary
+                        : AppColors.accent,
+                    backgroundColor: theme.brightness == Brightness.light
+                        ? Colors.grey[200]
+                        : Colors.grey[800],
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.refresh, size: 20, color: theme.brightness == Brightness.light
                           ? AppColors.primary
-                          : AppColors.accent,
-                      backgroundColor: theme.brightness == Brightness.light
-                          ? Colors.grey[200]
-                          : Colors.grey[800],
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.refresh, size: 20, color: theme.brightness == Brightness.light
-                            ? AppColors.primary
-                            : AppColors.accent),
-                        const SizedBox(width: 8),
-                        const Text('Quét lại'),
-                      ],
-                    ),
+                          : AppColors.accent),
+                      const SizedBox(width: 8),
+                      const Text('Quét lại'),
+                    ],
                   ),
                 ),
+              ),
 
-              // Add a spacer between buttons if needed
-              if (actionsList.contains('retry') &&
-                 (actionsList.contains('submit') || actionsList.contains('send_to_device') || actionsList.contains('dashboard')))
-                const SizedBox(width: 16),
+              const SizedBox(width: 12),
 
-              // Nút Dashboard (quay về)
-              if (actionsList.contains('dashboard'))
-                Expanded(
-                  child: _buildLoadingButton(
-                    context: context,
-                    isLoading: false, // Dashboard button is never in loading state
-                    loadingText: '',
-                    normalText: 'Quay về',
-                    onPressed: onDashboard,
-                    backgroundColor: isSuccess ? AppColors.success : AppColors.error,
-                    icon: Icons.home,
-                  ),
+              // Button 2: Dashboard - Always shown
+              Expanded(
+                child: _buildLoadingButton(
+                  context: context,
+                  isLoading: false,
+                  loadingText: '',
+                  normalText: 'Dashboard',
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).pushNamedAndRemoveUntil(
+                      AppRouter.dashboard,
+                      (route) => false,
+                    );
+                  },
+                  backgroundColor: isSuccess ? AppColors.success : AppColors.error,
+                  icon: Icons.home,
                 ),
+              ),
             ],
           ),
 
-          // Second row for Submit and Send to Device buttons (if needed)
-          if ((isFirmwareMode && actionsList.contains('send_to_device')) || actionsList.contains('submit'))
+          // Second row of buttons - shown only in specific modes
+          if (isFirmwareMode || widget.onSubmit != null)
             const SizedBox(height: 12),
 
-          if ((isFirmwareMode && actionsList.contains('send_to_device')) || actionsList.contains('submit'))
+          // Show action buttons for firmware mode
+          if (isFirmwareMode)
             Row(
               children: [
-                // Nút Gửi tới thiết bị (chỉ hiển thị trong mode firmware)
-                if (isFirmwareMode && actionsList.contains('send_to_device'))
-                  Expanded(
-                    child: _buildLoadingButton(
-                      context: context,
-                      isLoading: isBluetoothLoading && !isApiLoading,
-                      loadingText: 'Đang kết nối...',
-                      normalText: 'Gửi tới thiết bị',
-                      onPressed: hasBluetoothError ? null : onSendToDevice,
-                      backgroundColor: const Color(0xFF9333EA), // Màu tím cho bluetooth
-                      icon: Icons.bluetooth,
-                    ),
+                // Button 3: Send to Device (Only show in firmware mode)
+                Expanded(
+                  child: _buildLoadingButton(
+                    context: context,
+                    isLoading: _isBluetoothLoading && !_isApiLoading,
+                    loadingText: 'Đang kết nối...',
+                    normalText: 'Gửi tới thiết bị',
+                    onPressed: hasBluetoothError || isAnyLoading ? null : widget.onSendToDevice,
+                    backgroundColor: const Color(0xFF9333EA), // Màu tím cho bluetooth
+                    icon: Icons.bluetooth,
                   ),
+                ),
 
-                // Add a spacer between send_to_device and submit buttons
-                if (isFirmwareMode && actionsList.contains('send_to_device') && actionsList.contains('submit'))
-                  const SizedBox(width: 16),
+                const SizedBox(width: 12),
 
-                // Nút Cập nhật trạng thái (thay thế cho nút Xác nhận)
-                if (actionsList.contains('submit'))
-                  Expanded(
-                    child: _buildLoadingButton(
-                      context: context,
-                      // Trong mode firmware, phải loading cả API và Bluetooth
-                      // Các mode khác chỉ cần load API
-                      isLoading: isFirmwareMode ?
-                          (isApiLoading || isBluetoothLoading) :
-                          isApiLoading,
-                      loadingText: isFirmwareMode ?
-                          (isApiLoading && isBluetoothLoading ?
-                              'Đang xử lý...' :
-                              isApiLoading ? 'Đang gửi API...' : 'Đang kết nối...') :
-                          'Đang cập nhật...',
-                      normalText: 'Cập nhật trạng thái',
-                      onPressed: hasApiError || (isFirmwareMode && hasBluetoothError) ?
-                          null :
-                          onSubmit,
-                      backgroundColor: AppColors.primary,
-                      icon: Icons.check_circle,
-                    ),
+                // Button 4: Confirm - Calls API and then sends data to device in firmware mode
+                Expanded(
+                  child: _buildLoadingButton(
+                    context: context,
+                    isLoading: _isApiLoading || _isBluetoothLoading,
+                    loadingText: (_isApiLoading && _isBluetoothLoading) ?
+                                'Đang xử lý...' :
+                                (_isApiLoading ? 'Đang gửi API...' : 'Đang kết nối...'),
+                    normalText: 'Xác nhận',
+                    onPressed: hasApiError || hasBluetoothError || isAnyLoading ? null : widget.onSubmit,
+                    backgroundColor: AppColors.primary,
+                    icon: Icons.check_circle,
                   ),
+                ),
               ],
+            )
+          // For non-firmware modes, just show Submit/Confirm button if provided
+          else if (widget.onSubmit != null)
+            _buildLoadingButton(
+              context: context,
+              isLoading: _isApiLoading,
+              loadingText: 'Đang xử lý...',
+              normalText: 'Xác nhận',
+              onPressed: hasApiError || isAnyLoading ? null : widget.onSubmit,
+              backgroundColor: AppColors.primary,
+              icon: Icons.check_circle,
             ),
         ],
       ),
@@ -467,7 +532,7 @@ class ResultDialog extends StatelessWidget {
     final formattedDetails = <MapEntry<String, String>>[];
     final allowedKeys = ['device_serial', 'stage', 'status'];
 
-    details.forEach((key, value) {
+    widget.details.forEach((key, value) {
       // Only show allowed keys
       if (!allowedKeys.contains(key)) return;
 
@@ -494,4 +559,3 @@ class ResultDialog extends StatelessWidget {
     return formattedDetails;
   }
 }
-
