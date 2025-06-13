@@ -28,6 +28,16 @@ class SubmitScan extends ScannerEvent {
   List<Object> get props => [serialNumber, functionId];
 }
 
+class SendToDeviceOnly extends ScannerEvent {
+  final String serialNumber;
+  final String functionId;
+
+  const SendToDeviceOnly(this.serialNumber, this.functionId);
+
+  @override
+  List<Object> get props => [serialNumber, functionId];
+}
+
 class RetryScan extends ScannerEvent {
   const RetryScan();
 
@@ -36,4 +46,3 @@ class RetryScan extends ScannerEvent {
 }
 
 class ResetScanner extends ScannerEvent {}
-

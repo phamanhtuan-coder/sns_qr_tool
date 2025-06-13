@@ -127,6 +127,83 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
     on<ResetScanner>((event, emit) {
       emit(const ScannerInitial());
     });
+
+    on<SendToDeviceOnly>((event, emit) async {
+      print("DEBUG: SendToDeviceOnly event received with serialNumber: ${event.serialNumber}, functionId: ${event.functionId}");
+      try {
+        if (event.serialNumber.isEmpty) {
+          print("DEBUG: Empty serial number");
+          emit(const ScannerFailure(error: {
+            'title': 'Lỗi dữ liệu',
+            'message': 'Không có thông tin thiết bị để gửi.',
+            'details': {'errorCode': 'DATA-001', 'reason': 'Empty serial number', 'actions': ['retry', 'dashboard']},
+          }));
+          return;
+        }
+
+        if (state is! ScannerSuccess) return;
+        final currentState = state as ScannerSuccess;
+
+        // Chỉ set loading trạng thái Bluetooth vì chúng ta không gọi API
+        emit(currentState.copyWith(
+          isBluetoothLoading: true,
+        ));
+
+        // Thiết lập timeout
+        bool timeoutOccurred = false;
+        final timeoutFuture = Future.delayed(const Duration(seconds: 15), () {
+          timeoutOccurred = true;
+          return false;
+        });
+
+        // Gửi dữ liệu tới thiết bị qua Bluetooth
+        final resultFuture = _bluetoothService.sendSerialToDesktop(event.serialNumber);
+
+        // Chờ kết quả hoặc timeout
+        final result = await Future.any([resultFuture, timeoutFuture]);
+
+        String? bluetoothError;
+        if (timeoutOccurred) {
+          bluetoothError = 'Hết thời gian chờ kết nối Bluetooth';
+        } else if (!result) {
+          bluetoothError = 'Không thể gửi dữ liệu tới máy tính';
+        }
+
+        // Cập nhật trạng thái dựa trên kết quả
+        emit(currentState.copyWith(
+          isBluetoothLoading: false,
+          bluetoothError: bluetoothError,
+          result: {
+            ...currentState.result,
+            'details': {
+              ...currentState.result['details'] as Map<String, dynamic>,
+              'sent_to_desktop': bluetoothError == null ? 'Thành công' : 'Thất bại',
+            },
+          },
+        ));
+      } catch (e, stackTrace) {
+        print("DEBUG: Exception in SendToDeviceOnly handler: $e");
+        logError('Lỗi xử lý sự kiện SendToDeviceOnly', e, stackTrace);
+
+        if (state is ScannerSuccess) {
+          final currentState = state as ScannerSuccess;
+          emit(currentState.copyWith(
+            isBluetoothLoading: false,
+            bluetoothError: 'Lỗi kết nối Bluetooth: ${e.toString()}',
+          ));
+        } else {
+          emit(ScannerFailure(error: {
+            'title': 'Lỗi kết nối',
+            'message': 'Không thể kết nối với thiết bị.',
+            'details': {
+              'errorCode': 'BT-001',
+              'reason': e.toString(),
+              'actions': const ['retry', 'dashboard']
+            },
+          }));
+        }
+      }
+    });
   }
 
   Future<void> _handleSubmitScan(String serialNumber, String functionId, Emitter<ScannerState> emit) async {
@@ -140,39 +217,59 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
         isBluetoothLoading: functionId == 'firmware',
       ));
 
+      bool apiTimeoutOccurred = false;
+      bool bluetoothTimeoutOccurred = false;
+
+      // Thiết lập timeout cho API (20 giây)
+      final apiTimeoutFuture = Future.delayed(const Duration(seconds: 15), () {
+        apiTimeoutOccurred = true;
+        return {'success': false, 'message': 'Hết thời gian chờ phản hồi từ máy chủ'};
+      });
+
+      // Thiết lập timeout cho Bluetooth (15 giây)
+      final bluetoothTimeoutFuture = Future.delayed(const Duration(seconds: 15), () {
+        bluetoothTimeoutOccurred = true;
+        return false;
+      });
+
       // Start both operations concurrently if in firmware mode
-      final Future<bool> bluetoothFuture = functionId == 'firmware'
+      final bluetoothFuture = functionId == 'firmware'
           ? _bluetoothService.sendSerialToDesktop(serialNumber)
           : Future.value(true);
 
-      final Future<Map<String, dynamic>> apiFuture = _productionService.processScannedSerial(
+      final apiFuture = _productionService.processScannedSerial(
         serialNumber,
         functionId: functionId,
       );
 
-      // Wait for both operations to complete
-      final results = await Future.wait([
-        bluetoothFuture,
-        apiFuture,
-      ]);
+      // Wait for both operations to complete or timeout
+      final bool bluetoothResult = functionId == 'firmware'
+          ? await Future.any([bluetoothFuture, bluetoothTimeoutFuture])
+          : true;
 
-      final bool bluetoothSuccess = results[0] as bool;
-      final Map<String, dynamic> apiResult = results[1] as Map<String, dynamic>;
+      final Map<String, dynamic> apiResult = await Future.any([apiFuture, apiTimeoutFuture]);
 
       // Handle API result
       String? apiError;
-      if (!apiResult['success']) {
+      if (apiTimeoutOccurred) {
+        apiError = 'Hết thời gian chờ phản hồi từ máy chủ';
+      } else if (!apiResult['success']) {
         apiError = apiResult['message'] ?? 'Không thể cập nhật thông tin thiết bị';
       }
 
       // Handle Bluetooth result
       String? bluetoothError;
-      if (functionId == 'firmware' && !bluetoothSuccess) {
-        bluetoothError = 'Không thể gửi dữ liệu tới máy tính';
+      if (functionId == 'firmware') {
+        if (bluetoothTimeoutOccurred) {
+          bluetoothError = 'Hết thời gian chờ kết nối Bluetooth';
+        } else if (!bluetoothResult) {
+          bluetoothError = 'Không thể gửi dữ liệu tới máy tính';
+        }
       }
 
       // Update state based on results
-      if (apiResult['success'] && (functionId != 'firmware' || bluetoothSuccess)) {
+      if (!apiTimeoutOccurred && apiResult['success'] &&
+          (functionId != 'firmware' || (!bluetoothTimeoutOccurred && bluetoothResult))) {
         // Complete success
         emit(ScannerSuccess(
           result: {
@@ -201,7 +298,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
             'details': {
               ...currentState.result['details'] as Map<String, dynamic>,
               'sent_to_desktop': functionId == 'firmware'
-                  ? (bluetoothSuccess ? 'Thành công' : 'Thất bại')
+                  ? (bluetoothTimeoutOccurred ? 'Timeout' : bluetoothResult ? 'Thành công' : 'Thất bại')
                   : 'N/A',
             },
           },
@@ -223,4 +320,3 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
     return super.close();
   }
 }
-

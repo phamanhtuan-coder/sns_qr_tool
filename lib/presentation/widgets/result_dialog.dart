@@ -9,14 +9,16 @@ class ResultDialog extends StatelessWidget {
   final Map<String, String> details;
   final List<String> actions;
   final VoidCallback onClose;
-  final VoidCallback? onSubmit; // Callback riêng cho nút Xác nhận
-  final VoidCallback? onRetry; // Callback riêng cho nút Quét lại
-  final VoidCallback? onDashboard; // Callback riêng cho nút Quay về/Dashboard
+  final VoidCallback? onSubmit; // Callback cho nút Cập nhật trạng thái
+  final VoidCallback? onRetry; // Callback cho nút Quét lại
+  final VoidCallback? onDashboard; // Callback cho nút Quay về/Dashboard
+  final VoidCallback? onSendToDevice; // Callback mới cho nút Gửi tới thiết bị
   final bool isLoading;
   final bool isApiLoading;
   final bool isBluetoothLoading;
   final String? apiError;
   final String? bluetoothError;
+  final String? currentMode; // Để xác định mode hiện tại (firmware là mode 2)
 
   const ResultDialog({
     super.key,
@@ -29,12 +31,17 @@ class ResultDialog extends StatelessWidget {
     this.onSubmit,
     this.onRetry,
     this.onDashboard,
+    this.onSendToDevice,
     this.isLoading = false,
     this.isApiLoading = false,
     this.isBluetoothLoading = false,
     this.apiError,
     this.bluetoothError,
+    this.currentMode,
   });
+
+  // Kiểm tra xem hiện tại có phải là mode firmware không
+  bool get isFirmwareMode => currentMode == 'firmware';
 
   @override
   Widget build(BuildContext context) {
@@ -335,78 +342,111 @@ class ResultDialog extends StatelessWidget {
           top: BorderSide(color: Theme.of(context).dividerColor),
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
         children: [
-          // Nút Quét lại (retry)
-          if (actionsList.contains('retry'))
-            Expanded(
-              child: TextButton(
-                onPressed: isAnyLoading ? null : (onRetry ?? onClose),
-                style: TextButton.styleFrom(
-                  foregroundColor: theme.brightness == Brightness.light
-                      ? AppColors.primary
-                      : AppColors.accent,
-                  backgroundColor: theme.brightness == Brightness.light
-                      ? Colors.grey[200]
-                      : Colors.grey[800],
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Nút Quét lại (retry) - luôn hiển thị nếu được kích hoạt
+              if (actionsList.contains('retry'))
+                Expanded(
+                  child: TextButton(
+                    onPressed: isAnyLoading ? null : (onRetry ?? onClose),
+                    style: TextButton.styleFrom(
+                      foregroundColor: theme.brightness == Brightness.light
+                          ? AppColors.primary
+                          : AppColors.accent,
+                      backgroundColor: theme.brightness == Brightness.light
+                          ? Colors.grey[200]
+                          : Colors.grey[800],
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.refresh, size: 20, color: theme.brightness == Brightness.light
+                            ? AppColors.primary
+                            : AppColors.accent),
+                        const SizedBox(width: 8),
+                        const Text('Quét lại'),
+                      ],
+                    ),
                   ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.refresh, size: 20, color: theme.brightness == Brightness.light
-                        ? AppColors.primary
-                        : AppColors.accent),
-                    const SizedBox(width: 8),
-                    const Text('Quét lại'),
-                  ],
+
+              // Add a spacer between buttons if needed
+              if (actionsList.contains('retry') &&
+                 (actionsList.contains('submit') || actionsList.contains('send_to_device') || actionsList.contains('dashboard')))
+                const SizedBox(width: 16),
+
+              // Nút Dashboard (quay về)
+              if (actionsList.contains('dashboard'))
+                Expanded(
+                  child: _buildLoadingButton(
+                    context: context,
+                    isLoading: false, // Dashboard button is never in loading state
+                    loadingText: '',
+                    normalText: 'Quay về',
+                    onPressed: onDashboard,
+                    backgroundColor: isSuccess ? AppColors.success : AppColors.error,
+                    icon: Icons.home,
+                  ),
                 ),
-              ),
-            ),
+            ],
+          ),
 
-          // Add a spacer between buttons if both retry and another button exist
-          if ((actionsList.contains('retry') && actionsList.contains('submit')) ||
-              (actionsList.contains('retry') && actionsList.contains('dashboard')))
-            const SizedBox(width: 16),
+          // Second row for Submit and Send to Device buttons (if needed)
+          if ((isFirmwareMode && actionsList.contains('send_to_device')) || actionsList.contains('submit'))
+            const SizedBox(height: 12),
 
-          // Nút Xác nhận (submit)
-          if (actionsList.contains('submit'))
-            Expanded(
-              child: _buildLoadingButton(
-                context: context,
-                isLoading: isApiLoading || isBluetoothLoading,
-                loadingText: isApiLoading && isBluetoothLoading
-                    ? 'Đang xử lý...'
-                    : isApiLoading
-                        ? 'Đang gửi API...'
-                        : 'Đang kết nối...',
-                normalText: 'Xác nhận',
-                onPressed: hasApiError || hasBluetoothError ? null : onSubmit,
-                backgroundColor: AppColors.primary,
-                icon: Icons.check_circle,
-              ),
-            ),
+          if ((isFirmwareMode && actionsList.contains('send_to_device')) || actionsList.contains('submit'))
+            Row(
+              children: [
+                // Nút Gửi tới thiết bị (chỉ hiển thị trong mode firmware)
+                if (isFirmwareMode && actionsList.contains('send_to_device'))
+                  Expanded(
+                    child: _buildLoadingButton(
+                      context: context,
+                      isLoading: isBluetoothLoading && !isApiLoading,
+                      loadingText: 'Đang kết nối...',
+                      normalText: 'Gửi tới thiết bị',
+                      onPressed: hasBluetoothError ? null : onSendToDevice,
+                      backgroundColor: const Color(0xFF9333EA), // Màu tím cho bluetooth
+                      icon: Icons.bluetooth,
+                    ),
+                  ),
 
-          // Add a spacer between submit and dashboard if both exist
-          if (actionsList.contains('submit') && actionsList.contains('dashboard'))
-            const SizedBox(width: 16),
+                // Add a spacer between send_to_device and submit buttons
+                if (isFirmwareMode && actionsList.contains('send_to_device') && actionsList.contains('submit'))
+                  const SizedBox(width: 16),
 
-          // Nút Quay về (dashboard) - now in a separate if condition, not an else if
-          if (actionsList.contains('dashboard'))
-            Expanded(
-              child: _buildLoadingButton(
-                context: context,
-                isLoading: false, // Dashboard button is never in loading state
-                loadingText: '',
-                normalText: 'Quay về',
-                onPressed: onDashboard,
-                backgroundColor: isSuccess ? AppColors.success : AppColors.error,
-                icon: Icons.home,
-              ),
+                // Nút Cập nhật trạng thái (thay thế cho nút Xác nhận)
+                if (actionsList.contains('submit'))
+                  Expanded(
+                    child: _buildLoadingButton(
+                      context: context,
+                      // Trong mode firmware, phải loading cả API và Bluetooth
+                      // Các mode khác chỉ cần load API
+                      isLoading: isFirmwareMode ?
+                          (isApiLoading || isBluetoothLoading) :
+                          isApiLoading,
+                      loadingText: isFirmwareMode ?
+                          (isApiLoading && isBluetoothLoading ?
+                              'Đang xử lý...' :
+                              isApiLoading ? 'Đang gửi API...' : 'Đang kết nối...') :
+                          'Đang cập nhật...',
+                      normalText: 'Cập nhật trạng thái',
+                      onPressed: hasApiError || (isFirmwareMode && hasBluetoothError) ?
+                          null :
+                          onSubmit,
+                      backgroundColor: AppColors.primary,
+                      icon: Icons.check_circle,
+                    ),
+                  ),
+              ],
             ),
         ],
       ),
@@ -454,3 +494,4 @@ class ResultDialog extends StatelessWidget {
     return formattedDetails;
   }
 }
+

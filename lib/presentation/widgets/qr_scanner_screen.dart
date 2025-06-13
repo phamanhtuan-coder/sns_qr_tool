@@ -299,11 +299,24 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
                     details: details.map((key, value) => MapEntry(key, value.toString())),
                     actions: actions.map((e) => e.toString()).toList(),
                     isLoading: _isSubmitting,
+                    isApiLoading: _isSubmitting && widget.purpose != 'firmware',
+                    isBluetoothLoading: _isSubmitting && widget.purpose == 'firmware',
+                    currentMode: widget.purpose, // Truyền purpose hiện tại để xác định mode (firmware là mode 2)
                     onSubmit: actions.contains('submit')
                         ? () {
                             print("DEBUG: Submit button pressed with serial: $serial");
                             _handleSubmit(serial);
                       }
+                        : null,
+                    onSendToDevice: widget.purpose == 'firmware' && actions.contains('send_to_device')
+                        ? () {
+                            print("DEBUG: Send to device button pressed with serial: $serial");
+                            // Chỉ gửi qua Bluetooth service mà không gọi API
+                            if (mounted) {
+                              setState(() => _isSubmitting = true);
+                            }
+                            _scannerBloc.add(SendToDeviceOnly(serial, widget.purpose));
+                          }
                         : null,
                     onRetry: actions.contains('retry')
                         ? () {
@@ -337,11 +350,24 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
                     details: details.map((key, value) => MapEntry(key, value.toString())),
                     actions: actions.map((e) => e.toString()).toList(),
                     isLoading: _isSubmitting,
+                    isApiLoading: _isSubmitting && widget.purpose != 'firmware',
+                    isBluetoothLoading: _isSubmitting && widget.purpose == 'firmware',
+                    currentMode: widget.purpose, // Truyền purpose hiện tại để xác định mode
                     onSubmit: actions.contains('submit')
                         ? () {
                             print("DEBUG: Submit button pressed with serial: $serial");
                             _handleSubmit(serial);
                       }
+                        : null,
+                    onSendToDevice: widget.purpose == 'firmware' && actions.contains('send_to_device')
+                        ? () {
+                            print("DEBUG: Send to device button pressed with serial: $serial");
+                            // Chỉ gửi qua Bluetooth service mà không gọi API
+                            if (mounted) {
+                              setState(() => _isSubmitting = true);
+                            }
+                            _scannerBloc.add(SendToDeviceOnly(serial, widget.purpose));
+                          }
                         : null,
                     onRetry: actions.contains('retry')
                         ? () {
