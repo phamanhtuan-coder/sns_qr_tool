@@ -4,6 +4,7 @@ import 'package:smart_net_qr_scanner/data/services/scanner_service.dart';
 import 'package:smart_net_qr_scanner/data/services/production_service.dart';
 import 'package:smart_net_qr_scanner/data/services/camera_service.dart';
 import 'package:smart_net_qr_scanner/data/services/bluetooth_client_service.dart'; // Added import
+import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_bloc.dart'; // Added import for StockBloc
 import 'package:smart_net_qr_scanner/utils/logger.dart';
 import 'package:smart_net_qr_scanner/utils/di.dart';
 part 'scanner_event.dart';
@@ -213,6 +214,27 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
     final currentState = state as ScannerSuccess;
 
     try {
+      // Handle stock operations for stockin and stockout
+      switch (functionId) {
+        case 'stockin':
+        case 'stockout':
+          // Handle stock operations
+          final stockBloc = getIt<StockBloc>();
+          stockBloc.add(ScanDevice(serialNumber));
+
+          emit(ScannerSuccess(result: {
+            'title': 'Quét thành công',
+            'message': 'Đã quét thiết bị cho ${functionId == 'stockin' ? 'nhập kho' : 'xuất kho'}',
+            'details': {
+              'device_serial': serialNumber,
+              'operation': functionId == 'stockin' ? 'Nhập kho' : 'Xuất kho',
+              'status': 'Thành công',
+            },
+            'actions': const ['retry', 'dashboard'],
+          }));
+          return;
+      }
+
       // Set loading states
       emit(currentState.copyWith(
         isApiLoading: true,

@@ -204,7 +204,7 @@ class BluetoothClientService {
       final socket = await Socket.connect(
         host,
         port,
-        timeout: Duration(milliseconds: connectionTimeout)
+        timeout: const Duration(milliseconds: connectionTimeout)
       );
       await socket.close();
       print('📘 INFO: ✓ FOUND SERVER - Desktop server available at $host:$port');

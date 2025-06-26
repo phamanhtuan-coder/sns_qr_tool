@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:smart_net_qr_scanner/data/services/stock_service.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/dashboard/dashboard_bloc.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/screens/splash_screen.dart';
+import 'package:smart_net_qr_scanner/presentation/screens/stock_in_screen.dart';
+import 'package:smart_net_qr_scanner/presentation/screens/stock_out_screen.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/custom_app_bar.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/dashboard.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/login_page.dart';
@@ -16,6 +20,8 @@ class AppRouter {
   static const String login = '/login';
   static const String dashboard = '/dashboard';
   static const String scanner = '/scanner';
+  static const String stockIn = '/stock-in';
+  static const String stockOut = '/stock-out';
 
   // Track route history
   static final List<String> _routeHistory = [splash];
@@ -147,6 +153,26 @@ class AppRouter {
                 },
               ),
             ),
+          ),
+          maintainState: true,
+        );
+
+      case stockIn:
+        return _buildPageRoute(
+          settings,
+          BlocProvider(
+            create: (context) => StockBloc(StockService()),
+            child: const StockInScreen(),
+          ),
+          maintainState: true,
+        );
+
+      case stockOut:
+        return _buildPageRoute(
+          settings,
+          BlocProvider(
+            create: (context) => StockBloc(StockService()),
+            child: const StockOutScreen(),
           ),
           maintainState: true,
         );

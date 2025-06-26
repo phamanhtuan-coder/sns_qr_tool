@@ -5,6 +5,7 @@ import 'package:smart_net_qr_scanner/data/services/production_service.dart';
 import 'package:smart_net_qr_scanner/data/services/camera_service.dart';
 import 'package:smart_net_qr_scanner/data/services/bluetooth_client_service.dart';
 import 'package:smart_net_qr_scanner/data/services/api_client.dart';
+import 'package:smart_net_qr_scanner/data/services/stock_service.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/dashboard/dashboard_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/scanner/scanner_bloc.dart';
@@ -53,6 +54,9 @@ void setupDependencies() {
     }
     if (!getIt.isRegistered<ThemeBloc>()) {
       getIt.registerSingleton<ThemeBloc>(ThemeBloc());
+    }
+    if (!getIt.isRegistered<StockService>()) {
+      getIt.registerSingleton<StockService>(StockService());
     }
 
     print('DEBUG: All dependencies registered successfully');

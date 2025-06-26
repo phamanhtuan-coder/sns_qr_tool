@@ -31,7 +31,7 @@ void main() {
         providers: [
           ChangeNotifierProvider.value(value: themeProvider),
           BlocProvider(
-            create: (context) => getIt<AuthBloc>()..add(CheckLoginStatus()),
+            create: (context) => getIt<AuthBloc>()..add(const CheckLoginStatus()),
             lazy: false,
           ),
           BlocProvider(

@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 import 'package:equatable/equatable.dart';
 
 class Device extends Equatable {
@@ -14,6 +7,7 @@ class Device extends Equatable {
   final String status;
   final String? reason;
   final String? imageUrl;
+  final String? modelType; // Added modelType property to represent device type
 
   const Device({
     required this.id,
@@ -22,9 +16,15 @@ class Device extends Equatable {
     required this.status,
     this.reason,
     this.imageUrl,
+    this.modelType, // Added modelType parameter
   });
 
-  Device copyWith({String? status, String? reason, String? imageUrl}) {
+  Device copyWith({
+    String? status,
+    String? reason,
+    String? imageUrl,
+    String? modelType, // Added modelType
+  }) {
     return Device(
       id: id,
       batchId: batchId,
@@ -32,11 +32,12 @@ class Device extends Equatable {
       status: status ?? this.status,
       reason: reason ?? this.reason,
       imageUrl: imageUrl ?? this.imageUrl,
+      modelType: modelType ?? this.modelType, // Added modelType
     );
   }
 
   @override
-  List<Object?> get props => [id, batchId, serial, status, reason, imageUrl];
+  List<Object?> get props => [id, batchId, serial, status, reason, imageUrl, modelType];
 }
 
 final sampleDevices = [

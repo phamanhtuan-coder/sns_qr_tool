@@ -80,7 +80,7 @@ class AuthService {
           // Decode the JWT token to get user info and expiration
           final parts = accessToken.split('.');
           if (parts.length != 3) {
-            throw FormatException('Invalid JWT token format');
+            throw const FormatException('Invalid JWT token format');
           }
 
           final payload = parts[1];
@@ -165,7 +165,7 @@ class AuthService {
     final timeUntilExpiry = expiryDateTime.difference(now);
 
     // Calculate warning time (5 minutes before expiry)
-    final warningDuration = Duration(minutes: 5);
+    const warningDuration = Duration(minutes: 5);
     final timeUntilWarning = timeUntilExpiry - warningDuration;
 
     print('DEBUG: Token expires in ${timeUntilExpiry.inMinutes} minutes');

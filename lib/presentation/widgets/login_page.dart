@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
 import 'package:smart_net_qr_scanner/utils/app_colors.dart';

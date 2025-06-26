@@ -172,7 +172,7 @@ class _ErrorDialogState extends State<ErrorDialog> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: AppColors.error, width: 2),
+                            borderSide: const BorderSide(color: AppColors.error, width: 2),
                           ),
                         ),
                         maxLines: 3,

@@ -60,7 +60,7 @@ Future<void> main() async {
           BlocProvider(
             create: (context) {
               print('DEBUG: Creating AuthBloc');
-              return getIt<AuthBloc>()..add(CheckLoginStatus());
+              return getIt<AuthBloc>()..add(const CheckLoginStatus());
             },
             lazy: false,
           ),

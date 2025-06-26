@@ -76,10 +76,10 @@ final ThemeData darkTheme = ThemeData(
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: AppColors.primary),
+      borderSide: const BorderSide(color: AppColors.primary),
     ),
-    labelStyle: TextStyle(color: Colors.white70),
-    hintStyle: TextStyle(color: Colors.white54),
+    labelStyle: const TextStyle(color: Colors.white70),
+    hintStyle: const TextStyle(color: Colors.white54),
   ),
   textTheme: TextTheme(
     headlineLarge: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),

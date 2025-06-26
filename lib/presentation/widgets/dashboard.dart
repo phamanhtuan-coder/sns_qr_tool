@@ -240,7 +240,13 @@ class Dashboard extends StatelessWidget {
                       final func = functions[index];
                       return GestureDetector(
                         onTap: () {
-                          context.read<DashboardBloc>().add(SelectFunction(func['id'] as String));
+                          if (func['id'] == 'stockin') {
+                            Navigator.of(context).pushNamed(AppRouter.stockIn);
+                          } else if (func['id'] == 'stockout') {
+                            Navigator.of(context).pushNamed(AppRouter.stockOut);
+                          } else {
+                            context.read<DashboardBloc>().add(SelectFunction(func['id'] as String));
+                          }
                         },
                         child: Card(
                           elevation: 4,
