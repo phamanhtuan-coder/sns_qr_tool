@@ -12,6 +12,7 @@ class ImportWarehouseService {
       final originalBaseUrl = ApiClient.baseUrl;
       ApiClient.baseUrl = _baseUrl;
 
+      print('DEBUG: Starting import order: $importId');
       final result = await _apiClient.post(
         '/import-warehouse/start',
         {
@@ -22,7 +23,27 @@ class ImportWarehouseService {
       // Restore original base URL
       ApiClient.baseUrl = originalBaseUrl;
 
-      return result;
+      print('DEBUG: Start import order response: $result');
+
+      // Check for success response
+      if (result['status_code'] == 200 && result['data'] != null) {
+        return {
+          'success': true,
+          'data': result['data'],
+        };
+      } else {
+        // Handle error response
+        final errors = result['errors'] as List<dynamic>?;
+        final errorMessage = errors?.isNotEmpty == true
+            ? errors!.first['message'] ?? 'Unknown error'
+            : result['message'] ?? 'Failed to start import order';
+
+        return {
+          'success': false,
+          'errorCode': errors?.isNotEmpty == true ? errors!.first['code']?.toString() : 'START_ERROR',
+          'message': errorMessage,
+        };
+      }
     } catch (e) {
       print('DEBUG: Error in startImportOrder: $e');
       return {
@@ -41,10 +62,6 @@ class ImportWarehouseService {
 
       print('DEBUG: Getting unfinished invoices from: $_baseUrl/import-warehouse/invoice-not-finish');
 
-      // Get current token to check authentication
-      final token = await _apiClient.getAccessToken();
-      print('DEBUG: Using token: ${token?.substring(0, 20)}...');
-
       final result = await _apiClient.get('/import-warehouse/invoice-not-finish');
 
       print('DEBUG: getUnfinishedInvoices response: $result');
@@ -52,19 +69,23 @@ class ImportWarehouseService {
       // Restore original base URL
       ApiClient.baseUrl = originalBaseUrl;
 
-      // Check if the response indicates success
-      if (result['success'] == true || result.containsKey('data')) {
+      // Check for success response
+      if (result['status_code'] == 200 && result['data'] != null) {
         return {
           'success': true,
-          'data': result['data'] ?? result,
+          'data': result['data'],
         };
       } else {
         // Handle error case
-        print('DEBUG: API returned error: ${result['message']}');
+        final errors = result['errors'] as List<dynamic>?;
+        final errorMessage = errors?.isNotEmpty == true
+            ? errors!.first['message'] ?? 'Unknown error'
+            : result['message'] ?? 'Failed to get unfinished invoices';
+
         return {
           'success': false,
-          'errorCode': result['errorCode'] ?? 'API_ERROR',
-          'message': result['message'] ?? 'Failed to get unfinished invoices',
+          'errorCode': errors?.isNotEmpty == true ? errors!.first['code']?.toString() : 'API_ERROR',
+          'message': errorMessage,
         };
       }
     } catch (e) {
@@ -83,12 +104,33 @@ class ImportWarehouseService {
       final originalBaseUrl = ApiClient.baseUrl;
       ApiClient.baseUrl = _baseUrl;
 
+      print('DEBUG: Getting import order details for: $importId');
       final result = await _apiClient.get('/import-warehouse/?import_id=$importId');
 
       // Restore original base URL
       ApiClient.baseUrl = originalBaseUrl;
 
-      return result;
+      print('DEBUG: Import order details response: $result');
+
+      // Check for success response
+      if (result['status_code'] == 200 && result['data'] != null) {
+        return {
+          'success': true,
+          'data': result['data'],
+        };
+      } else {
+        // Handle error case
+        final errors = result['errors'] as List<dynamic>?;
+        final errorMessage = errors?.isNotEmpty == true
+            ? errors!.first['message'] ?? 'Unknown error'
+            : result['message'] ?? 'Failed to get import order details';
+
+        return {
+          'success': false,
+          'errorCode': errors?.isNotEmpty == true ? errors!.first['code']?.toString() : 'GET_DETAILS_ERROR',
+          'message': errorMessage,
+        };
+      }
     } catch (e) {
       print('DEBUG: Error in getImportOrderDetails: $e');
       return {
@@ -110,6 +152,7 @@ class ImportWarehouseService {
       final originalBaseUrl = ApiClient.baseUrl;
       ApiClient.baseUrl = _baseUrl;
 
+      print('DEBUG: Importing order item - ImportID: $importId, Serial: $serialNumber');
       final result = await _apiClient.post(
         '/import-warehouse/import-order',
         {
@@ -123,7 +166,27 @@ class ImportWarehouseService {
       // Restore original base URL
       ApiClient.baseUrl = originalBaseUrl;
 
-      return result;
+      print('DEBUG: Import order item response: $result');
+
+      // Check for success response
+      if (result['status_code'] == 200) {
+        return {
+          'success': true,
+          'data': result['data'],
+        };
+      } else {
+        // Handle error response
+        final errors = result['errors'] as List<dynamic>?;
+        final errorMessage = errors?.isNotEmpty == true
+            ? errors!.first['message'] ?? 'Unknown error'
+            : result['message'] ?? 'Failed to import order item';
+
+        return {
+          'success': false,
+          'errorCode': errors?.isNotEmpty == true ? errors!.first['code']?.toString() : 'IMPORT_ERROR',
+          'message': errorMessage,
+        };
+      }
     } catch (e) {
       print('DEBUG: Error in importOrderItem: $e');
       return {

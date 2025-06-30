@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_qr_scanner/data/services/import_warehouse_service.dart';
 import 'package:smart_net_qr_scanner/data/services/stock_service.dart';
+import 'package:smart_net_qr_scanner/data/services/delivery_service.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/dashboard/dashboard_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_bloc.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/delivery/delivery_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/screens/splash_screen.dart';
 import 'package:smart_net_qr_scanner/presentation/screens/stock_in_screen.dart';
 import 'package:smart_net_qr_scanner/presentation/screens/stock_out_screen.dart';
+import 'package:smart_net_qr_scanner/presentation/screens/shipper_screen.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/custom_app_bar.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/dashboard.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/login_page.dart';
@@ -23,6 +26,7 @@ class AppRouter {
   static const String scanner = '/scanner';
   static const String stockIn = '/stock-in';
   static const String stockOut = '/stock-out';
+  static const String shipper = '/shipper';
 
   // Track route history
   static final List<String> _routeHistory = [splash];
@@ -184,6 +188,18 @@ class AppRouter {
           maintainState: true,
         );
 
+      case shipper:
+        return _buildPageRoute(
+          settings,
+          BlocProvider(
+            create: (context) => DeliveryBloc(
+              getIt<DeliveryService>(),
+            ),
+            child: const ShipperScreen(),
+          ),
+          maintainState: true,
+        );
+
       default:
         return _buildPageRoute(
           settings,
@@ -254,33 +270,17 @@ class AppRouter {
     );
   }
 
-  static PageRouteBuilder<dynamic> _buildPageRoute(
+  static PageRoute<dynamic> _buildPageRoute(
     RouteSettings settings,
     Widget page, {
     bool maintainState = true,
+    bool fullscreenDialog = false,
   }) {
-    return PageRouteBuilder(
+    return MaterialPageRoute<dynamic>(
       settings: settings,
+      builder: (context) => page,
       maintainState: maintainState,
-      pageBuilder: (context, animation, secondaryAnimation) => page,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        if (settings.name == login && previousRoute == splash) {
-          // No animation for login page from splash
-          return child;
-        }
-
-        const begin = Offset(1.0, 0.0);
-        const end = Offset.zero;
-        const curve = Curves.easeInOutCubic;
-
-        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-        var offsetAnimation = animation.drive(tween);
-
-        return SlideTransition(position: offsetAnimation, child: child);
-      },
-      transitionDuration: settings.name == login
-          ? Duration.zero
-          : const Duration(milliseconds: 300),
+      fullscreenDialog: fullscreenDialog,
     );
   }
 
@@ -290,12 +290,24 @@ class AppRouter {
   // Helper method to get the title based on the purpose
   static String _getPurposeTitle(String purpose) {
     switch (purpose) {
-      case 'scan':
-        return 'Quét mã QR';
-      case 'generate':
-        return 'Tạo mã QR';
+      case 'identify':
+        return 'Xác định thiết bị';
+      case 'firmware':
+        return 'Cập nhật Firmware';
+      case 'testing':
+        return 'Kiểm tra thiết bị';
+      case 'packaging':
+        return 'Đóng gói thiết bị';
+      case 'stockin':
+        return 'Nhập kho';
+      case 'stockout':
+        return 'Xuất kho';
+      case 'delivery_scan':
+        return 'Quét đơn giao hàng';
+      case 'scan_import_id':
+        return 'Quét mã đơn nhập';
       default:
-        return 'QR Scanner';
+        return 'Quét QR Code';
     }
   }
 }

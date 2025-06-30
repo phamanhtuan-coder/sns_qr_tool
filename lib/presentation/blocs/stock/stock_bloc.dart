@@ -158,12 +158,8 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     StartImportOrder event,
     Emitter<StockState> emit,
   ) async {
-    if (state is! StockLoaded) return;
-
-    final currentState = state as StockLoaded;
-
     try {
-      emit(currentState.copyWith(isLoading: true));
+      emit(const StockLoading());
 
       final result = await _importWarehouseService.startImportOrder(event.importId);
 
@@ -192,11 +188,7 @@ class StockBloc extends Bloc<StockEvent, StockState> {
         final data = result['data'];
         final List<ImportOrder> importOrders = [];
 
-        if (data is Map && data['data'] is List) {
-          for (final item in data['data']) {
-            importOrders.add(ImportOrder.fromJson(item));
-          }
-        } else if (data is List) {
+        if (data is List) {
           for (final item in data) {
             importOrders.add(ImportOrder.fromJson(item));
           }
@@ -204,16 +196,13 @@ class StockBloc extends Bloc<StockEvent, StockState> {
 
         emit(StockImportLoaded(importOrders: importOrders));
       } else {
-        // If API fails, show a helpful error message with manual input option
+        // If API fails, show error but allow manual start
         final errorMessage = result['message'] ?? 'Không thể tải danh sách đơn nhập';
         print('DEBUG: LoadImportOrders failed: $errorMessage');
-
-        // For now, emit initial state so user can manually start import
         emit(const StockInitial());
       }
     } catch (e, stackTrace) {
       logError('Lỗi tải danh sách đơn nhập', e, stackTrace);
-      // On error, go back to initial state so user can manually start import
       emit(const StockInitial());
     }
   }
@@ -284,18 +273,7 @@ class StockBloc extends Bloc<StockEvent, StockState> {
           scannedImportItems: newScannedItems,
         ));
       } else {
-        // Handle API errors
-        final errorData = result['data'];
-        String errorMessage = result['message'] ?? 'Lỗi không xác định';
-
-        if (errorData is Map && errorData['errors'] is List) {
-          final errors = errorData['errors'] as List;
-          if (errors.isNotEmpty) {
-            errorMessage = errors[0]['message'] ?? errorMessage;
-          }
-        }
-
-        emit(StockError(errorMessage));
+        emit(StockError(result['message'] ?? 'Lỗi nhập thiết bị'));
       }
     } catch (e, stackTrace) {
       logError('Lỗi quét thiết bị nhập kho', e, stackTrace);
@@ -305,16 +283,15 @@ class StockBloc extends Bloc<StockEvent, StockState> {
 
   Map<String, String>? _parseQRData(String qrData) {
     try {
-      // Assuming QR data contains device information
-      // This might need to be adjusted based on actual QR format
-      if (qrData.isEmpty) return null;
-
+      // Expected format: {"import_id": "NK-2025-0002", "serial_number": "...", "batch_production_id": "...", "template_id": "1"}
+      // For now, simulate parsing - in real implementation, parse JSON
       return {
-        'serial_number': qrData,
-        'batch_production_id': 'BTCH12JUN2501JXHMC1K08JPX24K0TDV', // Default or extracted
-        'template_id': '1', // Default or extracted
+        'serial_number': 'SERL12JUN2501JXHMC1QCH11ECD111ACQ',
+        'batch_production_id': 'BTCH12JUN2501JXHMC1K08JPX24K0TDV',
+        'template_id': '1',
       };
     } catch (e) {
+      print('DEBUG: Error parsing QR data: $e');
       return null;
     }
   }
@@ -325,11 +302,21 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       Map<String, int> scannedCounts,
       ) {
     if (order.type == 'stockIn') {
-      return order.deviceTypes.every((deviceType) =>
-      deviceType.devices?.every((device) => scannedItems[device.id] ?? false) ?? false);
+      // For stock in, check if all devices are scanned
+      int totalDevices = 0;
+      for (final deviceType in order.deviceTypes) {
+        totalDevices += deviceType.devices?.length ?? 0;
+      }
+      return scannedItems.length >= totalDevices;
     } else {
-      return order.deviceTypes.every((deviceType) =>
-      (scannedCounts[deviceType.type] ?? 0) >= deviceType.quantity);
+      // For stock out, check if all device types have required quantities
+      for (final deviceType in order.deviceTypes) {
+        final scannedCount = scannedCounts[deviceType.type] ?? 0;
+        if (scannedCount < deviceType.quantity) {
+          return false;
+        }
+      }
+      return true;
     }
   }
 }

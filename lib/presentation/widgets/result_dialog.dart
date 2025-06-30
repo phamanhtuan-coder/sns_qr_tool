@@ -105,13 +105,20 @@ class _ResultDialogState extends State<ResultDialog> {
   }
 
   Duration _getTimeoutDuration() {
-    // Dynamic timeout based on current mode
+    // Dynamic timeout based on current mode and operation type
     switch (widget.currentMode) {
       case 'firmware':
-        return const Duration(seconds: 30); // Longer timeout for firmware
+        return const Duration(seconds: 45); // Longer timeout for firmware operations
       case 'stockin':
+        return const Duration(seconds: 25); // Medium timeout for stock-in operations
       case 'stockout':
-        return const Duration(seconds: 20); // Medium timeout for stock operations
+        return const Duration(seconds: 20); // Medium timeout for stock-out operations
+      case 'identify':
+        return const Duration(seconds: 15); // Shorter timeout for identification
+      case 'testing':
+        return const Duration(seconds: 30); // Medium-long timeout for testing
+      case 'packaging':
+        return const Duration(seconds: 20); // Medium timeout for packaging
       default:
         return const Duration(seconds: 15); // Default timeout
     }

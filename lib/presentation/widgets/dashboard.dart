@@ -49,6 +49,9 @@ class _DashboardState extends State<Dashboard> {
       Navigator.of(context).pushNamed(AppRouter.stockIn);
     } else if (functionId == 'stockout') {
       Navigator.of(context).pushNamed(AppRouter.stockOut);
+    } else if (functionId == 'shipper') {
+      // Temporary navigation to shipper interface
+      Navigator.of(context).pushNamed(AppRouter.shipper);
     } else {
       context.read<DashboardBloc>().add(SelectFunction(functionId));
     }
@@ -113,6 +116,15 @@ class _DashboardState extends State<Dashboard> {
             'icon': Icons.local_shipping,
             'color': const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFDC2626)]),
             'shadowColor': const Color(0x40EF4444),
+          },
+          // Temporary button for shipper interface
+          {
+            'id': 'shipper',
+            'name': 'Giao hàng (Demo)',
+            'description': 'Giao diện dành cho shipper',
+            'icon': Icons.delivery_dining,
+            'color': const LinearGradient(colors: [Color(0xFF06B6D4), Color(0xFF0891B2)]),
+            'shadowColor': const Color(0x4006B6D4),
           },
         ];
 

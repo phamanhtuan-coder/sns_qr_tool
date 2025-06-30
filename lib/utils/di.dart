@@ -7,11 +7,13 @@ import 'package:smart_net_qr_scanner/data/services/bluetooth_client_service.dart
 import 'package:smart_net_qr_scanner/data/services/api_client.dart';
 import 'package:smart_net_qr_scanner/data/services/stock_service.dart';
 import 'package:smart_net_qr_scanner/data/services/import_warehouse_service.dart';
+import 'package:smart_net_qr_scanner/data/services/delivery_service.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/dashboard/dashboard_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/scanner/scanner_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/theme/theme_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_bloc.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/delivery/delivery_bloc.dart';
 
 final getIt = GetIt.instance;
 
@@ -48,6 +50,9 @@ void setupDependencies() {
     if (!getIt.isRegistered<ImportWarehouseService>()) {
       getIt.registerSingleton<ImportWarehouseService>(ImportWarehouseService());
     }
+    if (!getIt.isRegistered<DeliveryService>()) {
+      getIt.registerSingleton<DeliveryService>(DeliveryService());
+    }
 
     // Then register blocs that depend on services
     print('DEBUG: Registering blocs');
@@ -69,6 +74,11 @@ void setupDependencies() {
           getIt<StockService>(),
           getIt<ImportWarehouseService>(),
         ),
+      );
+    }
+    if (!getIt.isRegistered<DeliveryBloc>()) {
+      getIt.registerSingleton<DeliveryBloc>(
+        DeliveryBloc(getIt<DeliveryService>()),
       );
     }
 
