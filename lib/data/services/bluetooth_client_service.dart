@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart' as fbs;
 import 'package:permission_handler/permission_handler.dart';
 
 enum ConnectionStatus {
@@ -11,7 +12,7 @@ enum ConnectionStatus {
   error,
 }
 
-enum BluetoothState {
+enum AppBluetoothState {
   unknown,
   unavailable,
   unauthorized,
@@ -46,14 +47,14 @@ class BluetoothClientService {
   }
 
   final StreamController<ConnectionStatus> _connectionStatusController = StreamController<ConnectionStatus>.broadcast();
-  final StreamController<BluetoothState> _bluetoothStateController = StreamController<BluetoothState>.broadcast();
+  final StreamController<AppBluetoothState> _bluetoothStateController = StreamController<AppBluetoothState>.broadcast();
   final StreamController<List<BluetoothDevice>> _devicesController = StreamController<List<BluetoothDevice>>.broadcast();
 
   Stream<ConnectionStatus> get connectionStatus => _connectionStatusController.stream;
-  Stream<BluetoothState> get bluetoothState => _bluetoothStateController.stream;
+  Stream<AppBluetoothState> get bluetoothState => _bluetoothStateController.stream;
   Stream<List<BluetoothDevice>> get devicesStream => _devicesController.stream;
 
-  BluetoothConnection? _connection;
+  fbs.BluetoothConnection? _connection;
   BluetoothDevice? _connectedDevice;
   bool _isScanning = false;
   List<BluetoothDevice> _discoveredDevices = [];
@@ -72,35 +73,35 @@ class BluetoothClientService {
       _listenToBluetoothState();
     } catch (e) {
       print('DEBUG: Error initializing Bluetooth: $e');
-      _bluetoothStateController.add(BluetoothState.unavailable);
+      _bluetoothStateController.add(AppBluetoothState.unavailable);
     }
   }
 
   Future<void> _checkBluetoothState() async {
     try {
-      final isEnabled = await FlutterBluetoothSerial.instance.isEnabled;
+      final isEnabled = await fbs.FlutterBluetoothSerial.instance.isEnabled;
       if (isEnabled == true) {
-        _bluetoothStateController.add(BluetoothState.poweredOn);
+        _bluetoothStateController.add(AppBluetoothState.poweredOn);
       } else {
-        _bluetoothStateController.add(BluetoothState.poweredOff);
+        _bluetoothStateController.add(AppBluetoothState.poweredOff);
       }
     } catch (e) {
       print('DEBUG: Error checking Bluetooth state: $e');
-      _bluetoothStateController.add(BluetoothState.unavailable);
+      _bluetoothStateController.add(AppBluetoothState.unavailable);
     }
   }
 
   void _listenToBluetoothState() {
-    FlutterBluetoothSerial.instance.onStateChanged().listen((state) {
+    fbs.FlutterBluetoothSerial.instance.onStateChanged().listen((state) {
       switch (state) {
-        case BluetoothState.STATE_ON:
-          _bluetoothStateController.add(BluetoothState.poweredOn);
+        case fbs.BluetoothState.STATE_ON:
+          _bluetoothStateController.add(AppBluetoothState.poweredOn);
           break;
-        case BluetoothState.STATE_OFF:
-          _bluetoothStateController.add(BluetoothState.poweredOff);
+        case fbs.BluetoothState.STATE_OFF:
+          _bluetoothStateController.add(AppBluetoothState.poweredOff);
           break;
         default:
-          _bluetoothStateController.add(BluetoothState.unknown);
+          _bluetoothStateController.add(AppBluetoothState.unknown);
       }
     });
   }
@@ -129,10 +130,10 @@ class BluetoothClientService {
 
   Future<bool> enableBluetooth() async {
     try {
-      final isEnabled = await FlutterBluetoothSerial.instance.isEnabled;
+      final isEnabled = await fbs.FlutterBluetoothSerial.instance.isEnabled;
       if (isEnabled == true) return true;
 
-      final result = await FlutterBluetoothSerial.instance.requestEnable();
+      final result = await fbs.FlutterBluetoothSerial.instance.requestEnable();
       return result == true;
     } catch (e) {
       print('DEBUG: Error enabling Bluetooth: $e');
@@ -142,7 +143,7 @@ class BluetoothClientService {
 
   Future<void> _loadBondedDevices() async {
     try {
-      final bondedDevices = await FlutterBluetoothSerial.instance.getBondedDevices();
+      final bondedDevices = await fbs.FlutterBluetoothSerial.instance.getBondedDevices();
       _bondedDevices = bondedDevices.map((device) => BluetoothDevice(
         name: device.name ?? 'Unknown Device',
         address: device.address,
@@ -166,7 +167,7 @@ class BluetoothClientService {
 
       print('DEBUG: Starting Bluetooth device discovery');
 
-      FlutterBluetoothSerial.instance.startDiscovery().listen((device) {
+      fbs.FlutterBluetoothSerial.instance.startDiscovery().listen((device) {
         final bluetoothDevice = BluetoothDevice(
           name: device.device.name ?? 'Unknown Device',
           address: device.device.address,
@@ -193,7 +194,7 @@ class BluetoothClientService {
     if (!_isScanning) return;
 
     try {
-      await FlutterBluetoothSerial.instance.cancelDiscovery();
+      await fbs.FlutterBluetoothSerial.instance.cancelDiscovery();
       _isScanning = false;
       print('DEBUG: Device discovery stopped');
     } catch (e) {
@@ -209,7 +210,7 @@ class BluetoothClientService {
       // Disconnect from previous connection
       await disconnect();
 
-      _connection = await BluetoothConnection.toAddress(device.address);
+      _connection = await fbs.BluetoothConnection.toAddress(device.address);
       _connectedDevice = device.copyWith(isConnected: true);
 
       _connectionStatusController.add(ConnectionStatus.connected);
@@ -234,7 +235,8 @@ class BluetoothClientService {
       print('DEBUG: Sending serial number via Bluetooth: $serialNumber');
 
       final data = '$serialNumber\n';
-      _connection!.output.add(data.codeUnits);
+      final dataBytes = Uint8List.fromList(data.codeUnits);
+      _connection!.output.add(dataBytes);
       await _connection!.output.allSent;
 
       print('DEBUG: Serial number sent successfully via Bluetooth');
@@ -248,7 +250,7 @@ class BluetoothClientService {
   Future<void> disconnect() async {
     try {
       if (_connection != null) {
-        await _connection!.dispose();
+        _connection!.dispose();
         _connection = null;
       }
 
