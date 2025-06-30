@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/custom_app_bar.dart';
-import 'package:smart_net_qr_scanner/presentation/widgets/device_type.dart';
-import 'package:smart_net_qr_scanner/presentation/widgets/order_selector.dart';
+import 'package:smart_net_qr_scanner/presentation/widgets/import_order_selector.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/stock_action_button.dart';
 import 'package:smart_net_qr_scanner/routes/app_router.dart';
 import 'package:smart_net_qr_scanner/utils/app_colors.dart';
@@ -16,10 +15,19 @@ class StockInScreen extends StatefulWidget {
 }
 
 class _StockInScreenState extends State<StockInScreen> {
+  final TextEditingController _importIdController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
-    context.read<StockBloc>().add(const LoadStockOrders('stockIn'));
+    // Load import orders instead of stock orders
+    context.read<StockBloc>().add(const LoadImportOrders());
+  }
+
+  @override
+  void dispose() {
+    _importIdController.dispose();
+    super.dispose();
   }
 
   void _handleScanQR() {
@@ -32,12 +40,67 @@ class _StockInScreenState extends State<StockInScreen> {
     );
   }
 
-  void _handleCompleteOrder() {
+  void _showStartImportDialog() {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Hoàn thành đơn hàng'),
-        content: const Text('Bạn có chắc chắn muốn hoàn thành đơn hàng này?'),
+        title: const Text('Bắt đầu đơn nhập'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Nhập mã đơn nhập để bắt đầu:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _importIdController,
+              decoration: const InputDecoration(
+                labelText: 'Mã đơn nhập',
+                hintText: 'NK-2025-0002',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      // TODO: Implement QR scanner for import ID
+                      Navigator.of(dialogContext).pop();
+                    },
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Quét QR'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final importId = _importIdController.text.trim();
+              if (importId.isNotEmpty) {
+                Navigator.of(dialogContext).pop();
+                _showConfirmStartDialog(importId);
+              }
+            },
+            child: const Text('Tiếp tục'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showConfirmStartDialog(String importId) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Xác nhận bắt đầu'),
+        content: Text('Bạn có chắc chắn muốn bắt đầu đơn nhập $importId?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
@@ -46,19 +109,13 @@ class _StockInScreenState extends State<StockInScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
-              context.read<StockBloc>().add(const CompleteOrder());
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Đơn hàng đã được hoàn thành thành công!'),
-                  backgroundColor: AppColors.success,
-                ),
-              );
+              context.read<StockBloc>().add(StartImportOrder(importId));
+              _importIdController.clear();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
+              backgroundColor: AppColors.primary,
             ),
-            child: const Text('Hoàn thành'),
+            child: const Text('Đồng ý'),
           ),
         ],
       ),
@@ -107,7 +164,7 @@ class _StockInScreenState extends State<StockInScreen> {
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: () {
-                        context.read<StockBloc>().add(const LoadStockOrders('stockIn'));
+                        context.read<StockBloc>().add(const LoadImportOrders());
                       },
                       child: const Text('Thử lại'),
                     ),
@@ -117,101 +174,227 @@ class _StockInScreenState extends State<StockInScreen> {
             );
           }
 
-          if (state is StockLoaded) {
+          if (state is StockImportLoaded) {
             return Column(
               children: [
-                // Order Selector
-                OrderSelector(
-                  orders: state.orders,
-                  selectedOrder: state.selectedOrder,
-                  onOrderSelected: (orderId) {
-                    context.read<StockBloc>().add(SelectOrder(orderId));
+                // Import Order Selector
+                ImportOrderSelector(
+                  importOrders: state.importOrders,
+                  selectedImportOrder: state.selectedImportOrder,
+                  onImportOrderSelected: (importId) {
+                    context.read<StockBloc>().add(SelectImportOrder(importId));
                   },
-                  title: 'Chọn đơn nhập hàng',
                 ),
 
                 // Content Area
                 Expanded(
-                  child: state.selectedOrder != null
-                      ? _buildOrderContent(state)
+                  child: state.selectedImportOrder != null
+                      ? _buildImportOrderContent(state)
                       : _buildEmptyState(),
                 ),
 
                 // Action Buttons
                 StockActionButtons(
-                  hasSelectedOrder: state.selectedOrder != null,
-                  isOrderComplete: state.isOrderComplete,
+                  hasSelectedOrder: state.selectedImportOrder != null,
+                  isOrderComplete: false, // Import orders don't have completion status
                   onScanQR: _handleScanQR,
-                  onComplete: state.isOrderComplete ? _handleCompleteOrder : null,
+                  onComplete: null, // No completion for import orders
                 ),
               ],
             );
           }
 
-          return const SizedBox.shrink();
+          // Initial state - show start import dialog button
+          return _buildInitialState();
         },
       ),
     );
   }
 
-  Widget _buildOrderContent(StockLoaded state) {
-    final order = state.selectedOrder!;
+  Widget _buildInitialState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.inventory_2_outlined,
+                size: 64,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Nhập kho',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Nhập mã đơn nhập để bắt đầu quá trình nhập kho',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.darkTextSecondary
+                    : AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: _showStartImportDialog,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('Bắt đầu đơn nhập'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImportOrderContent(StockImportLoaded state) {
+    final order = state.selectedImportOrder!;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with progress
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Thiết bị cần quét',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? AppColors.darkTextPrimary
-                        : AppColors.text,
+          // Header with order info
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Đơn nhập: ${order.id}',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Đang nhập',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.amber[300]
+                                : Colors.amber[800],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: state.isOrderComplete
-                      ? (Theme.of(context).brightness == Brightness.dark
-                          ? AppColors.success.withOpacity(0.2)
-                          : AppColors.success.withOpacity(0.1))
-                      : (Theme.of(context).brightness == Brightness.dark
-                          ? AppColors.warning.withOpacity(0.2)
-                          : AppColors.warning.withOpacity(0.1)),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  state.isOrderComplete ? 'Hoàn thành' : 'Đang thực hiện',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: state.isOrderComplete
-                        ? AppColors.success
-                        : Theme.of(context).brightness == Brightness.dark
-                            ? Colors.amber[300] // Light amber for dark theme
-                            : Colors.amber[800], // Dark amber for light theme
+                  const SizedBox(height: 8),
+                  Text(
+                    'Ngày nhập: ${_formatDate(order.importDate)}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.textSecondary,
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
           const SizedBox(height: 16),
 
-          // Device Types List
-          ...order.deviceTypes.map((deviceType) => DeviceTypeCard(
-            deviceType: deviceType,
-            scannedItems: state.scannedItems,
-            scannedCounts: state.scannedCounts,
-            isStockIn: true,
-          )).toList(),
+          // Scanned items
+          if (state.scannedImportItems.isNotEmpty) ...[
+            Text(
+              'Thiết bị đã quét (${state.scannedImportItems.length})',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...state.scannedImportItems.map((item) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.check_circle,
+                        color: AppColors.success,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.serialNumber,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            'Template: ${item.templateId}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? AppColors.darkTextSecondary
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )).toList(),
+          ] else ...[
+            Text(
+              'Chưa có thiết bị nào được quét',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Sử dụng nút "Quét mã QR" để quét thiết bị cần nhập kho',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.darkTextSecondary
+                    : AppColors.textSecondary,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -238,14 +421,14 @@ class _StockInScreenState extends State<StockInScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              'Chưa chọn đơn hàng',
+              'Chưa chọn đơn nhập',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Vui lòng chọn đơn hàng để xem danh sách thiết bị cần quét',
+              'Vui lòng chọn đơn nhập để bắt đầu quá trình nhập kho',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).brightness == Brightness.dark
@@ -257,5 +440,9 @@ class _StockInScreenState extends State<StockInScreen> {
         ),
       ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 }

@@ -6,10 +6,12 @@ import 'package:smart_net_qr_scanner/data/services/camera_service.dart';
 import 'package:smart_net_qr_scanner/data/services/bluetooth_client_service.dart';
 import 'package:smart_net_qr_scanner/data/services/api_client.dart';
 import 'package:smart_net_qr_scanner/data/services/stock_service.dart';
+import 'package:smart_net_qr_scanner/data/services/import_warehouse_service.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/dashboard/dashboard_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/scanner/scanner_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/theme/theme_bloc.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_bloc.dart';
 
 final getIt = GetIt.instance;
 
@@ -40,6 +42,12 @@ void setupDependencies() {
     if (!getIt.isRegistered<BluetoothClientService>()) {
       getIt.registerSingleton<BluetoothClientService>(BluetoothClientService());
     }
+    if (!getIt.isRegistered<StockService>()) {
+      getIt.registerSingleton<StockService>(StockService());
+    }
+    if (!getIt.isRegistered<ImportWarehouseService>()) {
+      getIt.registerSingleton<ImportWarehouseService>(ImportWarehouseService());
+    }
 
     // Then register blocs that depend on services
     print('DEBUG: Registering blocs');
@@ -55,14 +63,19 @@ void setupDependencies() {
     if (!getIt.isRegistered<ThemeBloc>()) {
       getIt.registerSingleton<ThemeBloc>(ThemeBloc());
     }
-    if (!getIt.isRegistered<StockService>()) {
-      getIt.registerSingleton<StockService>(StockService());
+    if (!getIt.isRegistered<StockBloc>()) {
+      getIt.registerSingleton<StockBloc>(
+        StockBloc(
+          getIt<StockService>(),
+          getIt<ImportWarehouseService>(),
+        ),
+      );
     }
 
     print('DEBUG: All dependencies registered successfully');
   } catch (e, stackTrace) {
-    print('DEBUG: Error setting up dependencies: $e');
+    print('DEBUG: Error registering dependencies: $e');
     print('DEBUG: Stack trace: $stackTrace');
-    throw Exception('Failed to setup dependencies: $e');
+    rethrow;
   }
 }

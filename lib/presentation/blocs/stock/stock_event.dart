@@ -41,3 +41,35 @@ class CompleteOrder extends StockEvent {
 class ResetStock extends StockEvent {
   const ResetStock();
 }
+
+// New events for import warehouse
+class StartImportOrder extends StockEvent {
+  final String importId;
+
+  const StartImportOrder(this.importId);
+
+  @override
+  List<Object?> get props => [importId];
+}
+
+class LoadImportOrders extends StockEvent {
+  const LoadImportOrders();
+}
+
+class SelectImportOrder extends StockEvent {
+  final String importId;
+
+  const SelectImportOrder(this.importId);
+
+  @override
+  List<Object?> get props => [importId];
+}
+
+class ScanImportDevice extends StockEvent {
+  final String qrData;
+
+  const ScanImportDevice(this.qrData);
+
+  @override
+  List<Object?> get props => [qrData];
+}

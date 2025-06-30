@@ -3,16 +3,32 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_qr_scanner/data/models/user.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/dashboard/dashboard_bloc.dart';
+import 'package:smart_net_qr_scanner/presentation/widgets/bluetooth_connection_widget.dart';
+import 'package:smart_net_qr_scanner/data/services/bluetooth_client_service.dart';
 import 'package:smart_net_qr_scanner/routes/app_router.dart';
 import 'package:smart_net_qr_scanner/utils/app_colors.dart';
 
-class Dashboard extends StatelessWidget {
+class Dashboard extends StatefulWidget {
   final User user;
 
   const Dashboard({
     Key? key,
     required this.user,
   }) : super(key: key);
+
+  @override
+  State<Dashboard> createState() => _DashboardState();
+}
+
+class _DashboardState extends State<Dashboard> {
+  final BluetoothClientService _bluetoothService = BluetoothClientService();
+  bool _showBluetoothWidget = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bluetoothService.initialize();
+  }
 
   // Helper method to create colors with opacity
   Color _withOpacity(Color color, double opacity) {
@@ -24,14 +40,28 @@ class Dashboard extends StatelessWidget {
     );
   }
 
+  void _handleFunctionTap(String functionId) {
+    if (functionId == 'firmware') {
+      setState(() {
+        _showBluetoothWidget = true;
+      });
+    } else if (functionId == 'stockin') {
+      Navigator.of(context).pushNamed(AppRouter.stockIn);
+    } else if (functionId == 'stockout') {
+      Navigator.of(context).pushNamed(AppRouter.stockOut);
+    } else {
+      context.read<DashboardBloc>().add(SelectFunction(functionId));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    print('DEBUG: Building Dashboard with user: $user');
+    print('DEBUG: Building Dashboard with user: ${widget.user}');
 
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, authState) {
         // Use the user from AuthState if available, otherwise use the provided user
-        final currentUser = authState.user ?? user;
+        final currentUser = authState.user ?? widget.user;
         print('DEBUG: Dashboard using user: $currentUser');
 
         final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -148,180 +178,259 @@ class Dashboard extends StatelessWidget {
               const SizedBox(width: 8),
             ],
           ),
-          body: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _withOpacity(Colors.black, 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: isDarkMode
-                            ? _withOpacity(AppColors.primary, 0.2)
-                            : _withOpacity(AppColors.primary, 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.settings_suggest_rounded,
-                          color: AppColors.primary,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Quy trình sản xuất',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.text,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Chọn quy trình bạn muốn thực hiện',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDarkMode
-                                  ? AppColors.darkTextSecondary
-                                  : AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: _withOpacity(AppColors.primary, 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '${functions.length} quy trình',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+          body: Column(
+            children: [
+              // Bluetooth connection widget for firmware mode
+              if (_showBluetoothWidget) ...[
+                BluetoothConnectionWidget(
+                  onConnectionChanged: () {
+                    // Refresh UI when connection changes
+                    setState(() {});
+                  },
                 ),
-                const SizedBox(height: 20),
-                Expanded(
-                  child: GridView.builder(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 1.1,
-                    ),
-                    itemCount: functions.length,
-                    itemBuilder: (context, index) {
-                      final func = functions[index];
-                      return GestureDetector(
-                        onTap: () {
-                          if (func['id'] == 'stockin') {
-                            Navigator.of(context).pushNamed(AppRouter.stockIn);
-                          } else if (func['id'] == 'stockout') {
-                            Navigator.of(context).pushNamed(AppRouter.stockOut);
-                          } else {
-                            context.read<DashboardBloc>().add(SelectFunction(func['id'] as String));
-                          }
-                        },
-                        child: Card(
-                          elevation: 4,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                // Continue to scanner button
+                StreamBuilder<ConnectionStatus>(
+                  stream: _bluetoothService.connectionStatus,
+                  builder: (context, snapshot) {
+                    final isConnected = snapshot.data == ConnectionStatus.connected;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: isConnected ? () {
+                                context.read<DashboardBloc>().add(const SelectFunction('firmware'));
+                                setState(() {
+                                  _showBluetoothWidget = false;
+                                });
+                              } : null,
+                              icon: const Icon(Icons.qr_code_scanner),
+                              label: const Text('Tiếp tục quét mã QR'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor: Colors.grey[400],
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
                           ),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: func['color'] as LinearGradient,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Stack(
-                              children: [
-                                Positioned(
-                                  top: 8,
-                                  right: 8,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: _withOpacity(Colors.white, 0.2),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Text(
-                                      '${index + 1}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
+                          const SizedBox(width: 12),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _showBluetoothWidget = false;
+                              });
+                            },
+                            child: const Text('Hủy'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                // Normal dashboard content
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _withOpacity(Colors.black, 0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: isDarkMode
+                                    ? _withOpacity(AppColors.primary, 0.2)
+                                    : _withOpacity(AppColors.primary, 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.settings_suggest_rounded,
+                                  color: AppColors.primary,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Quy trình sản xuất',
+                                      style: TextStyle(
+                                        fontSize: 18,
                                         fontWeight: FontWeight.bold,
+                                        color: isDarkMode ? AppColors.darkTextPrimary : AppColors.text,
                                       ),
                                     ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Chọn quy trình bạn muốn thực hiện',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: isDarkMode
+                                          ? AppColors.darkTextSecondary
+                                          : AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: _withOpacity(AppColors.primary, 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '${functions.length} quy trình',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.primary,
                                   ),
                                 ),
-                                Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        func['icon'] as IconData,
-                                        size: 32,
-                                        color: Colors.white,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        func['name'] as String,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        func['description'] as String,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: _withOpacity(Colors.white, 0.9),
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    },
+                        const SizedBox(height: 20),
+                        Expanded(
+                          child: GridView.builder(
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 1.1,
+                            ),
+                            itemCount: functions.length,
+                            itemBuilder: (context, index) {
+                              final func = functions[index];
+                              return GestureDetector(
+                                onTap: () => _handleFunctionTap(func['id'] as String),
+                                child: Card(
+                                  elevation: 4,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: func['color'] as LinearGradient,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Stack(
+                                      children: [
+                                        Positioned(
+                                          top: 8,
+                                          right: 8,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: BoxDecoration(
+                                              color: _withOpacity(Colors.white, 0.2),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Text(
+                                              '${index + 1}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Icon(
+                                                    func['icon'] as IconData,
+                                                    size: 32,
+                                                    color: Colors.white,
+                                                  ),
+                                                  if (func['id'] == 'firmware') ...[
+                                                    const SizedBox(width: 8),
+                                                    StreamBuilder<ConnectionStatus>(
+                                                      stream: _bluetoothService.connectionStatus,
+                                                      builder: (context, snapshot) {
+                                                        final isConnected = snapshot.data == ConnectionStatus.connected;
+                                                        return Container(
+                                                          padding: const EdgeInsets.all(4),
+                                                          decoration: BoxDecoration(
+                                                            color: isConnected
+                                                                ? Colors.green.withOpacity(0.3)
+                                                                : Colors.red.withOpacity(0.3),
+                                                            shape: BoxShape.circle,
+                                                          ),
+                                                          child: Icon(
+                                                            isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+                                                            size: 16,
+                                                            color: Colors.white,
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                func['name'] as String,
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.white,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                func['description'] as String,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: _withOpacity(Colors.white, 0.9),
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
-            ),
+            ],
           ),
         );
       },

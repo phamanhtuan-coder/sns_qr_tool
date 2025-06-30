@@ -89,16 +89,32 @@ class _ResultDialogState extends State<ResultDialog> {
     // Cancel existing timer if any
     _loadingTimeoutTimer?.cancel();
 
-    // Create new 15-second timeout timer
-    _loadingTimeoutTimer = Timer(const Duration(seconds: 15), () {
+    // Dynamic timeout based on current mode
+    Duration timeoutDuration = _getTimeoutDuration();
+
+    // Create dynamic timeout timer
+    _loadingTimeoutTimer = Timer(timeoutDuration, () {
       if (mounted) {
         setState(() {
           _isApiLoading = false;
           _isBluetoothLoading = false;
-          print("⚡ DEBUG: Loading timeout occurred - automatically stopping loading state after 15 seconds");
+          print("⚡ DEBUG: Loading timeout occurred - automatically stopping loading state after ${timeoutDuration.inSeconds} seconds");
         });
       }
     });
+  }
+
+  Duration _getTimeoutDuration() {
+    // Dynamic timeout based on current mode
+    switch (widget.currentMode) {
+      case 'firmware':
+        return const Duration(seconds: 30); // Longer timeout for firmware
+      case 'stockin':
+      case 'stockout':
+        return const Duration(seconds: 20); // Medium timeout for stock operations
+      default:
+        return const Duration(seconds: 15); // Default timeout
+    }
   }
 
   @override
@@ -184,6 +200,13 @@ class _ResultDialogState extends State<ResultDialog> {
                                 ? 'Đang gửi API...'
                                 : 'Đang kết nối Bluetooth...',
                         style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Timeout sau ${_getTimeoutDuration().inSeconds} giây',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[600],
+                        ),
                       ),
                     ],
                   ),

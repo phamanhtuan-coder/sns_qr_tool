@@ -22,6 +22,7 @@ class StockLoaded extends StockState {
   final Map<String, int> scannedCounts;
   final List<Device> scannedDevices;
   final bool isOrderComplete;
+  final bool isLoading;
 
   const StockLoaded({
     required this.orders,
@@ -30,6 +31,7 @@ class StockLoaded extends StockState {
     this.scannedCounts = const {},
     this.scannedDevices = const [],
     this.isOrderComplete = false,
+    this.isLoading = false,
   });
 
   StockLoaded copyWith({
@@ -39,14 +41,16 @@ class StockLoaded extends StockState {
     Map<String, int>? scannedCounts,
     List<Device>? scannedDevices,
     bool? isOrderComplete,
+    bool? isLoading,
   }) {
     return StockLoaded(
       orders: orders ?? this.orders,
-      selectedOrder: selectedOrder ?? this.selectedOrder,
+      selectedOrder: selectedOrder,
       scannedItems: scannedItems ?? this.scannedItems,
       scannedCounts: scannedCounts ?? this.scannedCounts,
       scannedDevices: scannedDevices ?? this.scannedDevices,
       isOrderComplete: isOrderComplete ?? this.isOrderComplete,
+      isLoading: isLoading ?? this.isLoading,
     );
   }
 
@@ -58,6 +62,39 @@ class StockLoaded extends StockState {
     scannedCounts,
     scannedDevices,
     isOrderComplete,
+    isLoading,
+  ];
+}
+
+// New state for import warehouse
+class StockImportLoaded extends StockState {
+  final List<ImportOrder> importOrders;
+  final ImportOrder? selectedImportOrder;
+  final List<ImportOrderItem> scannedImportItems;
+
+  const StockImportLoaded({
+    required this.importOrders,
+    this.selectedImportOrder,
+    this.scannedImportItems = const [],
+  });
+
+  StockImportLoaded copyWith({
+    List<ImportOrder>? importOrders,
+    ImportOrder? selectedImportOrder,
+    List<ImportOrderItem>? scannedImportItems,
+  }) {
+    return StockImportLoaded(
+      importOrders: importOrders ?? this.importOrders,
+      selectedImportOrder: selectedImportOrder,
+      scannedImportItems: scannedImportItems ?? this.scannedImportItems,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    importOrders,
+    selectedImportOrder,
+    scannedImportItems,
   ];
 }
 

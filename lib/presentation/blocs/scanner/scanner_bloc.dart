@@ -3,8 +3,8 @@ import 'package:equatable/equatable.dart';
 import 'package:smart_net_qr_scanner/data/services/scanner_service.dart';
 import 'package:smart_net_qr_scanner/data/services/production_service.dart';
 import 'package:smart_net_qr_scanner/data/services/camera_service.dart';
-import 'package:smart_net_qr_scanner/data/services/bluetooth_client_service.dart'; // Added import
-import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_bloc.dart'; // Added import for StockBloc
+import 'package:smart_net_qr_scanner/data/services/bluetooth_client_service.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_bloc.dart';
 import 'package:smart_net_qr_scanner/utils/logger.dart';
 import 'package:smart_net_qr_scanner/utils/di.dart';
 part 'scanner_event.dart';
@@ -28,14 +28,12 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
 
         if (event.error != null) {
           emit(ScannerFailure(error: event.error!));
-          // Don't stop the camera here, let the UI control camera state
           return;
         }
 
         final permissionResult = await _scannerService.requestCameraPermission();
         if (!permissionResult['success']) {
           emit(ScannerFailure(error: permissionResult['error']));
-          // Don't stop the camera here, let the UI control camera state
           return;
         }
 
@@ -46,13 +44,11 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
             'details': {'errorCode': 'QR-001', 'reason': 'Empty QR data'},
             'actions': ['retry', 'dashboard'],
           }));
-          // Don't stop the camera here, let the UI control camera state
           return;
         }
 
         // For identify purpose, we expect a simple serial string
         if (event.purpose == 'identify') {
-          // Don't stop the camera here, let the UI control camera state
           emit(ScannerSuccess(result: {
             'title': 'Quét thành công',
             'message': 'Đã quét thiết bị thành công',
@@ -62,20 +58,41 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           return;
         }
 
+        // Handle stockin and stockout with new workflow
+        if (event.purpose == 'stockin' || event.purpose == 'stockout') {
+          // For stock operations, trigger the stock bloc
+          final stockBloc = getIt<StockBloc>();
+          if (event.purpose == 'stockin') {
+            stockBloc.add(ScanImportDevice(event.data));
+          } else {
+            stockBloc.add(ScanDevice(event.data));
+          }
+
+          emit(ScannerSuccess(result: {
+            'title': 'Quét thành công',
+            'message': 'Đã quét thiết bị cho ${event.purpose == 'stockin' ? 'nhập kho' : 'xuất kho'}',
+            'details': {
+              'device_serial': event.data,
+              'operation': event.purpose == 'stockin' ? 'Nhập kho' : 'Xuất kho',
+              'status': 'Thành công',
+            },
+            'actions': const ['retry', 'dashboard'],
+          }));
+          return;
+        }
+
         // Handle other purposes
-        // Don't stop the camera here, let the UI control camera state
         emit(ScannerSuccess(result: {
           'title': 'Quét thành công',
           'message': 'Đã quét thiết bị thành công',
           'details': {'device_serial': event.data},
           'actions': event.purpose == 'firmware'
-              ? const ['retry', 'submit', 'send_to_device']  // Include send_to_device for firmware mode
+              ? const ['retry', 'submit', 'send_to_device']
               : const ['retry', 'submit'],
         }));
       } catch (e, stackTrace) {
-        print("DEBUG: Exception in SubmitScan handler: $e");
+        print("DEBUG: Exception in ScanQR handler: $e");
         logError('Lỗi xử lý sự kiện ScanQR', e, stackTrace);
-        // Don't stop the camera here, let the UI control camera state
         emit(ScannerFailure(error: {
           'title': 'Lỗi hệ thống',
           'message': 'Đã xảy ra lỗi khi xử lý quét mã QR.',
@@ -152,9 +169,10 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           isBluetoothLoading: true,
         ));
 
-        // Thiết lập timeout
+        // Dynamic timeout based on context
+        final timeoutDuration = _getTimeoutDuration(event.functionId);
         bool timeoutOccurred = false;
-        final timeoutFuture = Future.delayed(const Duration(seconds: 15), () {
+        final timeoutFuture = Future.delayed(timeoutDuration, () {
           timeoutOccurred = true;
           return false;
         });
@@ -209,6 +227,19 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
     });
   }
 
+  Duration _getTimeoutDuration(String functionId) {
+    // Dynamic timeout based on function type
+    switch (functionId) {
+      case 'firmware':
+        return const Duration(seconds: 30); // Longer timeout for firmware
+      case 'stockin':
+      case 'stockout':
+        return const Duration(seconds: 20); // Medium timeout for stock operations
+      default:
+        return const Duration(seconds: 15); // Default timeout
+    }
+  }
+
   Future<void> _handleSubmitScan(String serialNumber, String functionId, Emitter<ScannerState> emit) async {
     if (state is! ScannerSuccess) return;
     final currentState = state as ScannerSuccess;
@@ -218,10 +249,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
       switch (functionId) {
         case 'stockin':
         case 'stockout':
-          // Handle stock operations
-          final stockBloc = getIt<StockBloc>();
-          stockBloc.add(ScanDevice(serialNumber));
-
+          // Handle stock operations - already handled in ScanQR event
           emit(ScannerSuccess(result: {
             'title': 'Quét thành công',
             'message': 'Đã quét thiết bị cho ${functionId == 'stockin' ? 'nhập kho' : 'xuất kho'}',
@@ -244,14 +272,16 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
       bool apiTimeoutOccurred = false;
       bool bluetoothTimeoutOccurred = false;
 
-      // Thiết lập timeout cho API (20 giây)
-      final apiTimeoutFuture = Future.delayed(const Duration(seconds: 15), () {
+      // Dynamic timeout for API
+      final apiTimeoutDuration = _getTimeoutDuration(functionId);
+      final apiTimeoutFuture = Future.delayed(apiTimeoutDuration, () {
         apiTimeoutOccurred = true;
         return {'success': false, 'message': 'Hết thời gian chờ phản hồi từ máy chủ'};
       });
 
-      // Thiết lập timeout cho Bluetooth (15 giây)
-      final bluetoothTimeoutFuture = Future.delayed(const Duration(seconds: 15), () {
+      // Dynamic timeout for Bluetooth
+      final bluetoothTimeoutDuration = _getTimeoutDuration(functionId);
+      final bluetoothTimeoutFuture = Future.delayed(bluetoothTimeoutDuration, () {
         bluetoothTimeoutOccurred = true;
         return false;
       });

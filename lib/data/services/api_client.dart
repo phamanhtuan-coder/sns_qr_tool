@@ -203,12 +203,15 @@ class ApiClient {
     try {
       final currentHeaders = await headers;
       print('DEBUG: API GET request to: $baseUrl$endpoint');
+      print('DEBUG: Headers: $currentHeaders');
+
       final response = await _client.get(
         Uri.parse('$baseUrl$endpoint'),
         headers: currentHeaders,
       ).timeout(_timeout);
 
       print('DEBUG: API GET response status: ${response.statusCode}');
+      print('DEBUG: API GET response body: ${response.body}');
 
       if (response.body.isEmpty) {
         return {
