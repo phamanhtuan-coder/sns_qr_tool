@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:smart_net_qr_scanner/data/models/delivery_order.dart';
 import 'package:smart_net_qr_scanner/utils/app_colors.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:convert';
 
 class GoogleMapsWebView extends StatefulWidget {
   final Position? currentLocation;
@@ -23,50 +26,89 @@ class GoogleMapsWebView extends StatefulWidget {
 }
 
 class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
-  late final WebViewController _controller;
+  WebViewController? _controller;
   bool _isLoading = true;
   String? _error;
+  bool _isWebViewSupported = true;
 
   @override
   void initState() {
     super.initState();
-    _initializeWebView();
+    _checkWebViewSupport();
+  }
+
+  void _checkWebViewSupport() {
+    // Check if we're on web or if WebView is supported
+    if (kIsWeb) {
+      setState(() {
+        _isWebViewSupported = false;
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      _initializeWebView();
+    } catch (e) {
+      print('WebView initialization failed: $e');
+      setState(() {
+        _isWebViewSupported = false;
+        _isLoading = false;
+        _error = 'WebView không được hỗ trợ trên n��n tảng này';
+      });
+    }
   }
 
   void _initializeWebView() {
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (String url) {
-            setState(() {
-              _isLoading = true;
-              _error = null;
-            });
-          },
-          onPageFinished: (String url) {
-            setState(() {
-              _isLoading = false;
-            });
-            _addMarkersToMap();
-          },
-          onWebResourceError: (WebResourceError error) {
-            setState(() {
-              _isLoading = false;
-              _error = 'Lỗi tải bản đồ: ${error.description}';
-            });
-          },
-        ),
-      )
-      ..loadHtmlString(_generateMapHtml());
+    try {
+      _controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageStarted: (String url) {
+              if (mounted) {
+                setState(() {
+                  _isLoading = true;
+                  _error = null;
+                });
+              }
+            },
+            onPageFinished: (String url) {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                });
+              }
+              _addMarkersToMap();
+            },
+            onWebResourceError: (WebResourceError error) {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                  _error = 'Lỗi tải bản đồ: ${error.description}';
+                });
+              }
+            },
+          ),
+        );
+
+      _loadMap();
+    } catch (e) {
+      print('Error initializing WebView: $e');
+      setState(() {
+        _isWebViewSupported = false;
+        _isLoading = false;
+        _error = 'Không thể khởi tạo WebView';
+      });
+    }
   }
 
-  String _generateMapHtml() {
+  void _loadMap() {
     final center = widget.currentLocation != null
         ? '${widget.currentLocation!.latitude}, ${widget.currentLocation!.longitude}'
         : '21.028511, 105.804817'; // Default to Hanoi
 
-    return '''
+    final htmlString = '''
 <!DOCTYPE html>
 <html>
 <head>
@@ -278,6 +320,8 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
 </body>
 </html>
     ''';
+
+    _controller?.loadHtmlString(htmlString);
   }
 
   void _addMarkersToMap() {
@@ -297,7 +341,7 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
         addDeliveryMarkers(orders);
       ''';
 
-      _controller.runJavaScript(jsCode);
+      _controller?.runJavaScript(jsCode);
     }
   }
 
@@ -313,11 +357,27 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
   }
 
   void _focusOnCurrentLocation() {
-    _controller.runJavaScript('getCurrentLocation();');
+    _controller?.runJavaScript('getCurrentLocation();');
   }
 
   void _focusOnOrder(String orderId) {
-    _controller.runJavaScript('focusOnOrder("$orderId");');
+    _controller?.runJavaScript('focusOnOrder("$orderId");');
+  }
+
+  Color _getStatusColor(DeliveryStatus status) {
+    switch (status) {
+      case DeliveryStatus.assigned:
+        return AppColors.primary;
+      case DeliveryStatus.started:
+      case DeliveryStatus.inTransit:
+        return AppColors.warning;
+      case DeliveryStatus.delivered:
+        return AppColors.success;
+      case DeliveryStatus.failed:
+        return AppColors.error;
+      default:
+        return Colors.grey;
+    }
   }
 
   @override
@@ -397,7 +457,8 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
               ),
               child: Stack(
                 children: [
-                  WebViewWidget(controller: _controller),
+                  if (_isWebViewSupported)
+                    WebViewWidget(controller: _controller!),
 
                   // Loading indicator
                   if (_isLoading)
@@ -447,6 +508,102 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
                               icon: const Icon(Icons.refresh),
                               label: const Text('Thử lại'),
                             ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // Fallback for unsupported platforms
+                  if (!_isWebViewSupported)
+                    Container(
+                      color: isDark ? AppColors.darkSurface : Colors.white,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.map_outlined,
+                              size: 64,
+                              color: isDark ? AppColors.darkIconSecondary : AppColors.iconSecondary,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Bản đồ không khả dụng',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? AppColors.darkTextPrimary : AppColors.text,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'WebView không được hỗ trợ trên nền tảng này',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            if (widget.deliveryOrders.isNotEmpty) ...[
+                              Text(
+                                'Danh sách địa chỉ giao hàng:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark ? AppColors.darkTextPrimary : AppColors.text,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              ...widget.deliveryOrders.take(3).map((order) => Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isDark ? AppColors.darkCardBackground : AppColors.cardBackground,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isDark ? AppColors.darkDivider : AppColors.dividerColor,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.location_on,
+                                      size: 16,
+                                      color: _getStatusColor(order.status),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            order.customerName,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w500,
+                                              color: isDark ? AppColors.darkTextPrimary : AppColors.text,
+                                            ),
+                                          ),
+                                          Text(
+                                            order.customerAddress,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )),
+                              if (widget.deliveryOrders.length > 3)
+                                Text(
+                                  'Và ${widget.deliveryOrders.length - 3} địa chỉ khác...',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                                  ),
+                                ),
+                            ],
                           ],
                         ),
                       ),

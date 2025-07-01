@@ -1,4 +1,9 @@
-part of 'stock_bloc.dart';
+import 'package:equatable/equatable.dart';
+import 'package:smart_net_qr_scanner/data/models/device.dart';
+import 'package:smart_net_qr_scanner/data/models/export_order.dart';
+import 'package:smart_net_qr_scanner/data/models/import_order.dart';
+import 'package:smart_net_qr_scanner/data/models/stock_order.dart';
+
 
 abstract class StockState extends Equatable {
   const StockState();
@@ -98,7 +103,39 @@ class StockImportLoaded extends StockState {
   ];
 }
 
+// New state for export warehouse
+class StockExportLoaded extends StockState {
+  final List<ExportOrder> exportOrders;
+  final ExportOrder? selectedExportOrder;
+  final List<ExportItem> scannedExportItems;
+
+  const StockExportLoaded({
+    required this.exportOrders,
+    this.selectedExportOrder,
+    this.scannedExportItems = const [],
+  });
+
+  StockExportLoaded copyWith({
+    List<ExportOrder>? exportOrders,
+    ExportOrder? selectedExportOrder,
+    List<ExportItem>? scannedExportItems,
+  }) {
+    return StockExportLoaded(
+      exportOrders: exportOrders ?? this.exportOrders,
+      selectedExportOrder: selectedExportOrder,
+      scannedExportItems: scannedExportItems ?? this.scannedExportItems,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    exportOrders,
+    selectedExportOrder,
+    scannedExportItems,
+  ];
+}
 class StockError extends StockState {
+
   final String message;
 
   const StockError(this.message);

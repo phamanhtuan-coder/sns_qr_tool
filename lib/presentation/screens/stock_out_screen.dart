@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_bloc.dart';
+import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_state.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/custom_app_bar.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/device_type.dart';
 import 'package:smart_net_qr_scanner/presentation/widgets/order_selector.dart';

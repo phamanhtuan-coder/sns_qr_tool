@@ -22,24 +22,78 @@ class QRScannerScreen extends StatefulWidget {
   _QRScannerScreenState createState() => _QRScannerScreenState();
 }
 
-class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProviderStateMixin {
+class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderStateMixin {
   bool _isDeviceSupported = false;
   bool _isScanning = true;
   bool _isSubmitting = false;
+  bool _isProcessingQR = false; // Thêm flag để tránh xử lý nhiều QR cùng lúc
+  String? _lastScannedCode; // Lưu mã QR vừa quét để tránh quét lại
+  Timer? _scanCooldownTimer; // Timer để delay giữa các lần quét
   final MobileScannerController _controller = MobileScannerController();
   late final ScannerBloc _scannerBloc;
   late final CameraService _cameraService;
   StreamSubscription<String>? _cameraErrorSubscription;
   Timer? _scanTimeoutTimer;
 
+  // Animation controllers cho success animation
+  late AnimationController _successAnimationController;
+  late AnimationController _pulseAnimationController;
+  late Animation<double> _successScaleAnimation;
+  late Animation<double> _successOpacityAnimation;
+  late Animation<double> _pulseAnimation;
+  bool _showSuccessAnimation = false;
+
+  // Scanning delay constants
+  static const Duration _scanCooldown = Duration(milliseconds: 800); // Delay giữa các lần quét
+  static const Duration _processingDelay = Duration(milliseconds: 300); // Delay trước khi xử lý QR
+
   @override
   void initState() {
     super.initState();
     _scannerBloc = getIt<ScannerBloc>();
     _cameraService = getIt<CameraService>();
+    _setupAnimations();
     _setupCameraErrorListener();
     _checkDeviceSupport();
     _startScanTimeout();
+  }
+
+  void _setupAnimations() {
+    // Success animation - xuất hiện nhanh và biến mất từ từ
+    _successAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    _successScaleAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _successAnimationController,
+      curve: const Interval(0.0, 0.4, curve: Curves.elasticOut),
+    ));
+
+    _successOpacityAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _successAnimationController,
+      curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
+    ));
+
+    // Pulse animation cho hiệu ứng liên tục
+    _pulseAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
+    _pulseAnimation = Tween<double>(
+      begin: 0.8,
+      end: 1.2,
+    ).animate(CurvedAnimation(
+      parent: _pulseAnimationController,
+      curve: Curves.easeInOut,
+    ));
   }
 
   void _setupCameraErrorListener() {
@@ -69,13 +123,23 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
     print("DEBUG: Attempting camera restart for retry");
 
     if (mounted) {
-      // Don't stop the camera, just reset the scanning state
+      // Reset scanning states
       setState(() {
         _isScanning = true;
-        // Cancel existing timer if any
-        _scanTimeoutTimer?.cancel();
-        _startScanTimeout();
+        _isProcessingQR = false;
+        _showSuccessAnimation = false;
+        _lastScannedCode = null;
       });
+
+      // Reset animations
+      _successAnimationController.reset();
+      _pulseAnimationController.stop();
+
+      // Cancel existing timers
+      _scanTimeoutTimer?.cancel();
+      _scanCooldownTimer?.cancel();
+
+      _startScanTimeout();
       _scannerBloc.add(ResetScanner());
     }
   }
@@ -153,8 +217,13 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
   void _safePop() {
     print("DEBUG: _safePop called - navigating back to dashboard");
 
-    // Cancel any active timer
+    // Cancel any active timers
     _scanTimeoutTimer?.cancel();
+    _scanCooldownTimer?.cancel();
+
+    // Stop animations
+    _successAnimationController.dispose();
+    _pulseAnimationController.dispose();
 
     // Make sure controller is stopped on navigation
     _controller.stop();
@@ -170,7 +239,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
   }
 
   void _handleDetection(BarcodeCapture capture) {
-    if (!_isScanning) return;  // Ignore detections when not in scanning mode
+    if (!_isScanning || _isProcessingQR) return; // Ignore detections when not in scanning mode or processing
 
     final barcode = capture.barcodes.firstOrNull;
 
@@ -185,7 +254,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
         },
       }));
 
-      // Don't stop the camera, just stop the scanning process
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() => _isScanning = false);
@@ -194,17 +262,84 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
       return;
     }
 
-    // Cancel timeout timer since we detected a valid QR code
-    _scanTimeoutTimer?.cancel();
+    final scannedCode = barcode.rawValue!;
 
-    // Don't stop the camera, just stop the scanning process
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() => _isScanning = false);
-      }
+    // Kiểm tra xem có phải mã QR giống với lần quét trước không
+    if (_lastScannedCode == scannedCode) {
+      print("DEBUG: Duplicate QR code detected, ignoring: $scannedCode");
+      return;
+    }
+
+    // Kiểm tra cooldown timer
+    if (_scanCooldownTimer?.isActive == true) {
+      print("DEBUG: Scan cooldown active, ignoring detection");
+      return;
+    }
+
+    print("DEBUG: QR code detected: $scannedCode");
+
+    // Set processing flag và lưu mã QR
+    setState(() {
+      _isProcessingQR = true;
+      _lastScannedCode = scannedCode;
     });
 
-    _scannerBloc.add(ScanQR(widget.purpose, barcode.rawValue!));
+    // Hiển thị success animation
+    _showSuccessDetection();
+
+    // Delay trước khi xử lý QR để cho người dùng thấy animation
+    Timer(_processingDelay, () {
+      if (mounted) {
+        // Cancel timeout timer since we detected a valid QR code
+        _scanTimeoutTimer?.cancel();
+
+        // Stop scanning
+        setState(() => _isScanning = false);
+
+        // Process the QR code
+        _scannerBloc.add(ScanQR(widget.purpose, scannedCode));
+
+        // Start cooldown timer
+        _startScanCooldown();
+      }
+    });
+  }
+
+  void _showSuccessDetection() {
+    setState(() {
+      _showSuccessAnimation = true;
+    });
+
+    // Start success animation
+    _successAnimationController.forward();
+
+    // Start pulse animation
+    _pulseAnimationController.repeat(reverse: true);
+
+    // Hide animation after a delay
+    Timer(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        _successAnimationController.reverse().then((_) {
+          if (mounted) {
+            setState(() {
+              _showSuccessAnimation = false;
+            });
+            _pulseAnimationController.stop();
+          }
+        });
+      }
+    });
+  }
+
+  void _startScanCooldown() {
+    _scanCooldownTimer = Timer(_scanCooldown, () {
+      if (mounted) {
+        setState(() {
+          _isProcessingQR = false;
+        });
+        print("DEBUG: Scan cooldown completed");
+      }
+    });
   }
 
   void _handleError(MobileScannerException error) {
@@ -231,6 +366,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
   @override
   void dispose() {
     _scanTimeoutTimer?.cancel();
+    _scanCooldownTimer?.cancel();
+    _successAnimationController.dispose();
+    _pulseAnimationController.dispose();
     _controller.stop();
     _controller.dispose();
     _isScanning = false;
@@ -258,9 +396,60 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
                 },
               ),
             QROverlay(
-              isScanning: _isScanning,
+              isScanning: _isScanning && !_isProcessingQR,
               purpose: widget.purpose,
+              isProcessing: _isProcessingQR,
             ),
+
+            // Success Animation Overlay
+            if (_showSuccessAnimation)
+              Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: _successAnimationController,
+                  builder: (context, child) {
+                    return Container(
+                      color: Colors.black.withOpacity(0.3),
+                      child: Center(
+                        child: Transform.scale(
+                          scale: _successScaleAnimation.value,
+                          child: Opacity(
+                            opacity: _successOpacityAnimation.value,
+                            child: AnimatedBuilder(
+                              animation: _pulseAnimation,
+                              builder: (context, child) {
+                                return Transform.scale(
+                                  scale: _pulseAnimation.value,
+                                  child: Container(
+                                    width: 120,
+                                    height: 120,
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.withOpacity(0.9),
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.green.withOpacity(0.6),
+                                          blurRadius: 20,
+                                          spreadRadius: 5,
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.check,
+                                      color: Colors.white,
+                                      size: 60,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
             Positioned(
               bottom: 0,
               left: 0,
@@ -274,10 +463,31 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
                     colors: [Colors.black87, Colors.transparent],
                   ),
                 ),
-                child: Text(
-                  _isScanning ? 'Đặt mã QR vào khung để quét' : 'Quét tạm dừng. Nhấn "Thử lại" để tiếp tục.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _isProcessingQR
+                          ? 'Đang xử lý mã QR...'
+                          : _isScanning
+                              ? 'Đặt mã QR vào khung để quét'
+                              : 'Quét tạm dừng. Nhấn "Thử lại" để tiếp tục.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                    if (_isProcessingQR)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -362,7 +572,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
                     onSendToDevice: widget.purpose == 'firmware' && actions.contains('send_to_device')
                         ? () {
                             print("DEBUG: Send to device button pressed with serial: $serial");
-                            // Chỉ gửi qua Bluetooth service mà không gọi API
+                            // Ch��� gửi qua Bluetooth service mà không gọi API
                             if (mounted) {
                               setState(() => _isSubmitting = true);
                             }

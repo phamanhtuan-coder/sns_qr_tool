@@ -5,9 +5,10 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  // Base URL
-  static const String _railwaykUrl = 'https://iothomeconnectapiv2-production.up.railway.app/api';
-  static String _baseUrl = _railwaykUrl;
+  // Base URLs
+  static const String _railwayUrl = 'https://iothomeconnectapiv2-production.up.railway.app/api';
+  static const String _snsEcomUrl = 'https://sns-e-com-backend.up.railway.app/api';
+  static String _baseUrl = _railwayUrl;
 
   static String get baseUrl => _baseUrl;
   static set baseUrl(String url) {
@@ -19,6 +20,24 @@ class ApiClient {
     );
   }
 
+  // Get the appropriate base URL for different API endpoints
+  static String _getUrlForEndpoint(String endpoint) {
+    // Use SNS E-com backend for stock and shipper APIs
+    if (endpoint.startsWith('/warehouse/') ||
+        endpoint.startsWith('/stockin') ||
+        endpoint.startsWith('/stockout') ||
+        endpoint.startsWith('/stock') ||
+        endpoint.startsWith('/delivery') ||
+        endpoint.startsWith('/shipper')) {
+      print('DEBUG: Using SNS E-com URL for endpoint: $endpoint');
+      return _snsEcomUrl;
+    }
+
+    // Use Railway URL for all other APIs (auth, etc.)
+    print('DEBUG: Using Railway URL for endpoint: $endpoint');
+    return _railwayUrl;
+  }
+
   final http.Client _client;
   final Duration _timeout;
 
@@ -26,11 +45,12 @@ class ApiClient {
       : _client = client ?? http.Client(),
         _timeout = timeout ?? const Duration(seconds: 10); // Reduced timeout
 
-  // Initialize the API client - Now only using ngrok URL
+  // Initialize the API client - Now using both URLs
   static Future<void> initializeBaseUrl() async {
-    // Always use ngrok URL
-    _baseUrl = _railwaykUrl;
-    print('DEBUG: Using ngrok API URL: $_baseUrl');
+    // Default to Railway URL
+    _baseUrl = _railwayUrl;
+    print('DEBUG: Initialized with Railway API URL: $_baseUrl');
+    print('DEBUG: SNS E-com URL available: $_snsEcomUrl');
 
     // Try to save the setting for next time
     try {
@@ -202,11 +222,12 @@ class ApiClient {
   Future<Map<String, dynamic>> get(String endpoint) async {
     try {
       final currentHeaders = await headers;
-      print('DEBUG: API GET request to: $baseUrl$endpoint');
+      final targetUrl = _getUrlForEndpoint(endpoint);
+      print('DEBUG: API GET request to: $targetUrl$endpoint');
       print('DEBUG: Headers: $currentHeaders');
 
       final response = await _client.get(
-        Uri.parse('$baseUrl$endpoint'),
+        Uri.parse('$targetUrl$endpoint'),
         headers: currentHeaders,
       ).timeout(_timeout);
 
@@ -276,9 +297,10 @@ class ApiClient {
   ) async {
     try {
       final currentHeaders = await headers;
-      print('DEBUG: API POST request to: $baseUrl$endpoint with body: $body');
+      final targetUrl = _getUrlForEndpoint(endpoint);
+      print('DEBUG: API POST request to: $targetUrl$endpoint with body: $body');
       final response = await _client.post(
-        Uri.parse('$baseUrl$endpoint'),
+        Uri.parse('$targetUrl$endpoint'),
         body: json.encode(body),
         headers: currentHeaders,
       ).timeout(_timeout);
@@ -348,9 +370,10 @@ class ApiClient {
   ) async {
     try {
       final currentHeaders = await headers;
-      print('DEBUG: API PATCH request to: $baseUrl$endpoint with body: $body');
+      final targetUrl = _getUrlForEndpoint(endpoint);
+      print('DEBUG: API PATCH request to: $targetUrl$endpoint with body: $body');
       final response = await _client.patch(
-        Uri.parse('$baseUrl$endpoint'),
+        Uri.parse('$targetUrl$endpoint'),
         body: json.encode(body),
         headers: currentHeaders,
       ).timeout(_timeout);
@@ -418,9 +441,10 @@ class ApiClient {
   Future<Map<String, dynamic>> delete(String endpoint) async {
     try {
       final currentHeaders = await headers;
-      print('DEBUG: API DELETE request to: $baseUrl$endpoint');
+      final targetUrl = _getUrlForEndpoint(endpoint);
+      print('DEBUG: API DELETE request to: $targetUrl$endpoint');
       final response = await _client.delete(
-        Uri.parse('$baseUrl$endpoint'),
+        Uri.parse('$targetUrl$endpoint'),
         headers: currentHeaders,
       ).timeout(_timeout);
 

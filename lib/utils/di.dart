@@ -7,6 +7,7 @@ import 'package:smart_net_qr_scanner/data/services/bluetooth_client_service.dart
 import 'package:smart_net_qr_scanner/data/services/api_client.dart';
 import 'package:smart_net_qr_scanner/data/services/stock_service.dart';
 import 'package:smart_net_qr_scanner/data/services/import_warehouse_service.dart';
+import 'package:smart_net_qr_scanner/data/services/export_warehouse_service.dart';
 import 'package:smart_net_qr_scanner/data/services/delivery_service.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/auth/auth_bloc.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/dashboard/dashboard_bloc.dart';
@@ -50,6 +51,9 @@ void setupDependencies() {
     if (!getIt.isRegistered<ImportWarehouseService>()) {
       getIt.registerSingleton<ImportWarehouseService>(ImportWarehouseService());
     }
+    if (!getIt.isRegistered<ExportWarehouseService>()) {
+      getIt.registerSingleton<ExportWarehouseService>(ExportWarehouseService());
+    }
     if (!getIt.isRegistered<DeliveryService>()) {
       getIt.registerSingleton<DeliveryService>(DeliveryService());
     }
@@ -73,6 +77,7 @@ void setupDependencies() {
         StockBloc(
           getIt<StockService>(),
           getIt<ImportWarehouseService>(),
+          getIt<ExportWarehouseService>(),
         ),
       );
     }

@@ -73,3 +73,39 @@ class ScanImportDevice extends StockEvent {
   @override
   List<Object?> get props => [qrData];
 }
+
+// New events for export warehouse
+class StartExportOrder extends StockEvent {
+  final String exportId;
+
+  const StartExportOrder(this.exportId);
+
+  @override
+  List<Object?> get props => [exportId];
+}
+
+class LoadExportOrders extends StockEvent {
+  const LoadExportOrders();
+}
+
+class SelectExportOrder extends StockEvent {
+  final String exportId;
+
+  const SelectExportOrder(this.exportId);
+
+  @override
+  List<Object?> get props => [exportId];
+}
+
+class ScanExportDevice extends StockEvent {
+  final String qrData;
+
+  const ScanExportDevice(this.qrData);
+
+  @override
+  List<Object?> get props => [qrData];
+}
+
+class CompleteExportOrder extends StockEvent {
+  const CompleteExportOrder();
+}

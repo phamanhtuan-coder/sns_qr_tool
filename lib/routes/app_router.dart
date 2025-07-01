@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:smart_net_qr_scanner/data/services/export_warehouse_service.dart';
 import 'package:smart_net_qr_scanner/data/services/import_warehouse_service.dart';
 import 'package:smart_net_qr_scanner/data/services/stock_service.dart';
 import 'package:smart_net_qr_scanner/data/services/delivery_service.dart';
@@ -169,6 +170,7 @@ class AppRouter {
             create: (context) => StockBloc(
               getIt<StockService>(),
               getIt<ImportWarehouseService>(),
+              getIt<ExportWarehouseService>(),
             ),
             child: const StockInScreen(),
           ),
@@ -182,6 +184,7 @@ class AppRouter {
             create: (context) => StockBloc(
               getIt<StockService>(),
               getIt<ImportWarehouseService>(),
+              getIt<ExportWarehouseService>(),
             ),
             child: const StockOutScreen(),
           ),
