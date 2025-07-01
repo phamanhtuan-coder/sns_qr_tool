@@ -164,7 +164,11 @@ class _ShipperScreenState extends State<ShipperScreen>
                       _buildAssignedOrders(state),
                       _buildInProgressOrders(state),
                       _buildCompletedOrders(state),
-                      MapViewWidget(currentLocation: state.currentLocation),
+                      MapViewWidget(
+                        currentLocation: state.currentLocation,
+                        deliveryOrders: state.orders,
+                        selectedOrder: state.selectedOrder,
+                      ),
                     ],
                   );
                 }

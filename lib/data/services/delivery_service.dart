@@ -1,129 +1,196 @@
-import 'dart:async';
-import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
 import 'package:smart_net_qr_scanner/data/models/delivery_order.dart';
+import 'package:smart_net_qr_scanner/utils/logger.dart';
 
 class DeliveryService {
-  static const String _baseUrl = 'https://sns-e-com-backend.up.railway.app/api';
-  StreamController<Position>? _positionStreamController;
-  Position? _currentPosition;
-
-  // Mock data for demonstration
-  final List<DeliveryOrder> _mockOrders = [
-    DeliveryOrder(
-      id: 'DH-2025-001',
-      customerName: 'Nguyễn Văn A',
-      customerPhone: '0901234567',
-      customerAddress: '123 Đường ABC, Quận 1, TP.HCM',
-      pickupAddress: 'Kho SmartNet, 456 Đường XYZ, Quận 2, TP.HCM',
-      createdDate: DateTime.now().subtract(const Duration(hours: 2)),
-      expectedDeliveryDate: DateTime.now().add(const Duration(hours: 4)),
-      status: DeliveryStatus.assigned,
-      totalAmount: 2500000,
-      isUrgent: true,
-      latitude: 10.7769,
-      longitude: 106.7009,
-      items: [
-        const DeliveryItem(
-          id: '1',
-          name: 'Smart Sensor SS-100',
-          quantity: 5,
-          price: 300000,
-          description: 'Cảm biến thông minh cho nhà thông minh',
-        ),
-        const DeliveryItem(
-          id: '2',
-          name: 'Control Unit CU-200',
-          quantity: 2,
-          price: 500000,
-          description: 'Bộ điều khiển trung tâm',
-        ),
-        const DeliveryItem(
-          id: '3',
-          name: 'Gateway GW-300',
-          quantity: 1,
-          price: 1000000,
-          description: 'Thiết bị kết nối mạng',
-        ),
-      ],
-    ),
-    DeliveryOrder(
-      id: 'DH-2025-002',
-      customerName: 'Trần Thị B',
-      customerPhone: '0987654321',
-      customerAddress: '789 Đường DEF, Quận 3, TP.HCM',
-      pickupAddress: 'Kho SmartNet, 456 Đường XYZ, Quận 2, TP.HCM',
-      createdDate: DateTime.now().subtract(const Duration(hours: 1)),
-      expectedDeliveryDate: DateTime.now().add(const Duration(hours: 6)),
-      status: DeliveryStatus.assigned,
-      totalAmount: 1800000,
-      isUrgent: false,
-      latitude: 10.7890,
-      longitude: 106.6947,
-      items: [
-        const DeliveryItem(
-          id: '4',
-          name: 'Smart Sensor SS-100',
-          quantity: 3,
-          price: 300000,
-        ),
-        const DeliveryItem(
-          id: '5',
-          name: 'Gateway GW-300',
-          quantity: 1,
-          price: 1000000,
-        ),
-      ],
-    ),
-    DeliveryOrder(
-      id: 'DH-2025-003',
-      customerName: 'Lê Văn C',
-      customerPhone: '0912345678',
-      customerAddress: '321 Đường GHI, Quận 7, TP.HCM',
-      pickupAddress: 'Kho SmartNet, 456 Đường XYZ, Quận 2, TP.HCM',
-      createdDate: DateTime.now().subtract(const Duration(minutes: 30)),
-      expectedDeliveryDate: DateTime.now().add(const Duration(hours: 8)),
-      status: DeliveryStatus.started,
-      totalAmount: 3200000,
-      isUrgent: false,
-      latitude: 10.7429,
-      longitude: 106.7180,
-      startedAt: DateTime.now().subtract(const Duration(minutes: 15)),
-      items: [
-        const DeliveryItem(
-          id: '6',
-          name: 'Smart Sensor SS-100',
-          quantity: 8,
-          price: 300000,
-        ),
-        const DeliveryItem(
-          id: '7',
-          name: 'Control Unit CU-200',
-          quantity: 2,
-          price: 500000,
-        ),
-      ],
-    ),
-  ];
-
+  // Mock data for testing - replace with actual API calls
   Future<List<DeliveryOrder>> getAssignedOrders() async {
-    await Future.delayed(const Duration(milliseconds: 800));
-    return _mockOrders;
+    try {
+      // Simulate API delay
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Mock delivery orders with coordinates for Vietnam locations
+      return [
+        DeliveryOrder(
+          id: 'DH-2025-001',
+          customerName: 'Nguyễn Văn A',
+          customerPhone: '0909123456',
+          customerAddress: '123 Nguyễn Huệ, Quận 1, TP.HCM',
+          pickupAddress: 'Kho SmartNet, Quận 7, TP.HCM',
+          createdDate: DateTime.now().subtract(const Duration(hours: 2)),
+          expectedDeliveryDate: DateTime.now().add(const Duration(hours: 4)),
+          status: DeliveryStatus.assigned,
+          items: const [
+            DeliveryItem(
+              id: 'item1',
+              name: 'Router WiFi',
+              quantity: 1,
+              price: 500000,
+              description: 'Router WiFi 6 băng tần kép',
+            ),
+          ],
+          totalAmount: 500000,
+          notes: 'Giao hàng trong giờ hành chính',
+          trackingCode: 'TK001',
+          latitude: 10.7769, // Nguyen Hue Street, Ho Chi Minh City
+          longitude: 106.7009,
+        ),
+        DeliveryOrder(
+          id: 'DH-2025-002',
+          customerName: 'Trần Thị B',
+          customerPhone: '0909654321',
+          customerAddress: '456 Lê Lợi, Quận 3, TP.HCM',
+          pickupAddress: 'Kho SmartNet, Quận 7, TP.HCM',
+          createdDate: DateTime.now().subtract(const Duration(hours: 1)),
+          expectedDeliveryDate: DateTime.now().add(const Duration(hours: 6)),
+          status: DeliveryStatus.started,
+          items: const [
+            DeliveryItem(
+              id: 'item2',
+              name: 'Switch 24 port',
+              quantity: 2,
+              price: 1200000,
+              description: 'Switch quản lý 24 port Gigabit',
+            ),
+          ],
+          totalAmount: 2400000,
+          notes: 'Liên hệ trước khi giao',
+          trackingCode: 'TK002',
+          startedAt: DateTime.now().subtract(const Duration(minutes: 30)),
+          latitude: 10.7684, // Le Loi Street, District 3
+          longitude: 106.6934,
+        ),
+        DeliveryOrder(
+          id: 'DH-2025-003',
+          customerName: 'Lê Văn C',
+          customerPhone: '0909111222',
+          customerAddress: '789 Võ Văn Tần, Quận 3, TP.HCM',
+          pickupAddress: 'Kho SmartNet, Quận 7, TP.HCM',
+          createdDate: DateTime.now().subtract(const Duration(hours: 3)),
+          expectedDeliveryDate: DateTime.now().add(const Duration(hours: 2)),
+          status: DeliveryStatus.inTransit,
+          items: const [
+            DeliveryItem(
+              id: 'item3',
+              name: 'Access Point',
+              quantity: 4,
+              price: 800000,
+              description: 'Access Point WiFi 6 outdoor',
+            ),
+          ],
+          totalAmount: 3200000,
+          notes: 'Kiểm tra hàng kỹ trước khi giao',
+          trackingCode: 'TK003',
+          startedAt: DateTime.now().subtract(const Duration(hours: 1)),
+          latitude: 10.7673, // Vo Van Tan Street
+          longitude: 106.6898,
+        ),
+        DeliveryOrder(
+          id: 'DH-2025-004',
+          customerName: 'Phạm Thị D',
+          customerPhone: '0909333444',
+          customerAddress: '321 Hai Bà Trưng, Quận 1, TP.HCM',
+          pickupAddress: 'Kho SmartNet, Quận 7, TP.HCM',
+          createdDate: DateTime.now().subtract(const Duration(hours: 5)),
+          expectedDeliveryDate: DateTime.now().subtract(const Duration(hours: 1)),
+          status: DeliveryStatus.delivered,
+          items: const [
+            DeliveryItem(
+              id: 'item4',
+              name: 'Firewall',
+              quantity: 1,
+              price: 3000000,
+              description: 'Firewall doanh nghiệp',
+            ),
+          ],
+          totalAmount: 3000000,
+          notes: 'Đã giao thành công',
+          trackingCode: 'TK004',
+          startedAt: DateTime.now().subtract(const Duration(hours: 3)),
+          deliveredAt: DateTime.now().subtract(const Duration(hours: 1)),
+          deliveryNote: 'Giao hàng thành công, khách hàng hài lòng',
+          latitude: 10.7709, // Hai Ba Trung Street
+          longitude: 106.7025,
+        ),
+        DeliveryOrder(
+          id: 'DH-2025-005',
+          customerName: 'Hoàng Văn E',
+          customerPhone: '0909555666',
+          customerAddress: '654 Điện Biên Phủ, Quận Bình Thạnh, TP.HCM',
+          pickupAddress: 'Kho SmartNet, Quận 7, TP.HCM',
+          createdDate: DateTime.now().subtract(const Duration(hours: 4)),
+          expectedDeliveryDate: DateTime.now().add(const Duration(hours: 3)),
+          status: DeliveryStatus.assigned,
+          items: const [
+            DeliveryItem(
+              id: 'item5',
+              name: 'Camera IP',
+              quantity: 8,
+              price: 250000,
+              description: 'Camera IP 2MP Full HD',
+            ),
+          ],
+          totalAmount: 2000000,
+          notes: 'Cần lắp đặt sau khi giao',
+          trackingCode: 'TK005',
+          latitude: 10.8012, // Dien Bien Phu Street, Binh Thanh
+          longitude: 106.7147,
+        ),
+      ];
+    } catch (e, stackTrace) {
+      logError('Error loading delivery orders', e, stackTrace);
+      throw Exception('Không thể tải danh sách đơn giao hàng');
+    }
+  }
+
+  Future<Position?> getCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        return null;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          return null;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        return null;
+      }
+
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+    } catch (e, stackTrace) {
+      logError('Error getting current location', e, stackTrace);
+      return null;
+    }
   }
 
   Future<Map<String, dynamic>> startDelivery(String orderId) async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    
-    // Simulate API call success
-    return {
-      'success': true,
-      'message': 'Đã bắt đầu giao hàng thành công',
-      'data': {
-        'order_id': orderId,
-        'started_at': DateTime.now().toIso8601String(),
-        'status': 'started',
-      },
-    };
+    try {
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Mock successful response
+      return {
+        'success': true,
+        'message': 'Đã bắt đầu giao hàng thành công',
+        'data': {
+          'order_id': orderId,
+          'started_at': DateTime.now().toIso8601String(),
+        }
+      };
+    } catch (e, stackTrace) {
+      logError('Error starting delivery', e, stackTrace);
+      return {
+        'success': false,
+        'message': 'Không thể bắt đầu giao hàng: ${e.toString()}',
+      };
+    }
   }
 
   Future<Map<String, dynamic>> completeDelivery({
@@ -132,115 +199,87 @@ class DeliveryService {
     required String note,
     required bool isSuccessful,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 800));
-    
-    return {
-      'success': true,
-      'message': isSuccessful ? 'Giao hàng thành công' : 'Đã ghi nhận giao hàng thất bại',
-      'data': {
-        'order_id': orderId,
-        'delivered_at': DateTime.now().toIso8601String(),
-        'status': isSuccessful ? 'delivered' : 'failed',
-        'photo_path': photoPath,
-        'note': note,
-      },
-    };
+    try {
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Mock successful response
+      return {
+        'success': true,
+        'message': isSuccessful
+            ? 'Giao hàng thành công'
+            : 'Đã ghi nhận giao hàng thất bại',
+        'data': {
+          'order_id': orderId,
+          'completed_at': DateTime.now().toIso8601String(),
+          'photo_path': photoPath,
+          'note': note,
+          'is_successful': isSuccessful,
+        }
+      };
+    } catch (e, stackTrace) {
+      logError('Error completing delivery', e, stackTrace);
+      return {
+        'success': false,
+        'message': 'Không thể hoàn thành giao hàng: ${e.toString()}',
+      };
+    }
   }
 
+  // Add the missing updateDeliveryLocation method
   Future<Map<String, dynamic>> updateDeliveryLocation({
     required String orderId,
     double? latitude,
     double? longitude,
   }) async {
-    // Simulate API call to update delivery location
-    await Future.delayed(const Duration(milliseconds: 300));
+    try {
+      // Skip update if location is not available
+      if (latitude == null || longitude == null) {
+        return {
+          'success': false,
+          'message': 'Không có thông tin vị trí để cập nhật',
+        };
+      }
 
-    if (latitude == null || longitude == null) {
+      // Simulate API call delay
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Mock successful response
+      return {
+        'success': true,
+        'message': 'Cập nhật vị trí thành công',
+        'data': {
+          'order_id': orderId,
+          'latitude': latitude,
+          'longitude': longitude,
+          'updated_at': DateTime.now().toIso8601String(),
+        }
+      };
+    } catch (e, stackTrace) {
+      logError('Error updating delivery location', e, stackTrace);
       return {
         'success': false,
-        'message': 'Invalid location data',
+        'message': 'Không thể cập nhật vị trí giao hàng: ${e.toString()}',
       };
     }
-
-    return {
-      'success': true,
-      'message': 'Location updated successfully',
-      'data': {
-        'order_id': orderId,
-        'latitude': latitude,
-        'longitude': longitude,
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-    };
   }
 
-  Future<bool> requestLocationPermission() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return false;
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return false;
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      return false;
-    }
-
-    return true;
-  }
-
-  Future<Position?> getCurrentLocation() async {
+  Future<double> calculateDistance(
+    double startLatitude,
+    double startLongitude,
+    double endLatitude,
+    double endLongitude,
+  ) async {
     try {
-      final hasPermission = await requestLocationPermission();
-      if (!hasPermission) return null;
-
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+      return Geolocator.distanceBetween(
+        startLatitude,
+        startLongitude,
+        endLatitude,
+        endLongitude,
       );
-      _currentPosition = position;
-      return position;
-    } catch (e) {
-      print('Error getting location: $e');
-      return null;
+    } catch (e, stackTrace) {
+      logError('Error calculating distance', e, stackTrace);
+      return 0.0;
     }
-  }
-
-  Stream<Position> getLocationStream() {
-    _positionStreamController = StreamController<Position>.broadcast();
-    
-    requestLocationPermission().then((hasPermission) {
-      if (hasPermission) {
-        Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 10, // Update every 10 meters
-          ),
-        ).listen(
-          (position) {
-            _currentPosition = position;
-            _positionStreamController?.add(position);
-          },
-          onError: (error) {
-            print('Location stream error: $error');
-          },
-        );
-      }
-    });
-
-    return _positionStreamController!.stream;
-  }
-
-  double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-    return Geolocator.distanceBetween(lat1, lon1, lat2, lon2);
   }
 
   String formatDistance(double distanceInMeters) {
@@ -251,23 +290,75 @@ class DeliveryService {
     }
   }
 
-  Duration calculateEstimatedTime(double distanceInMeters) {
-    // Assuming average speed of 30 km/h in city traffic
-    final hours = distanceInMeters / 1000 / 30;
-    return Duration(minutes: (hours * 60).round());
+  Duration estimateDeliveryTime(double distanceInMeters) {
+    // Assume average speed of 25 km/h in city traffic
+    final averageSpeedKmH = 25.0;
+    final distanceInKm = distanceInMeters / 1000;
+    final timeInHours = distanceInKm / averageSpeedKmH;
+    final timeInMinutes = (timeInHours * 60).round();
+
+    return Duration(minutes: timeInMinutes);
   }
 
-  String formatDuration(Duration duration) {
-    if (duration.inHours > 0) {
-      return '${duration.inHours}h ${duration.inMinutes % 60}p';
-    } else {
-      return '${duration.inMinutes}p';
+  // Additional utility methods for delivery management
+  Future<Map<String, dynamic>> getDeliveryTracking(String orderId) async {
+    try {
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      return {
+        'success': true,
+        'data': {
+          'order_id': orderId,
+          'tracking_updates': [
+            {
+              'timestamp': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
+              'status': 'Đơn hàng được tạo',
+              'location': 'Kho SmartNet',
+            },
+            {
+              'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
+              'status': 'Shipper đã nhận đơn',
+              'location': 'Kho SmartNet',
+            },
+            {
+              'timestamp': DateTime.now().subtract(const Duration(minutes: 30)).toIso8601String(),
+              'status': 'Đang vận chuyển',
+              'location': 'Đường Nguyễn Văn Linh',
+            },
+          ],
+        }
+      };
+    } catch (e, stackTrace) {
+      logError('Error getting delivery tracking', e, stackTrace);
+      return {
+        'success': false,
+        'message': 'Không thể lấy thông tin tracking: ${e.toString()}',
+      };
     }
   }
 
-  Position? get currentPosition => _currentPosition;
+  Future<Map<String, dynamic>> cancelDelivery({
+    required String orderId,
+    required String reason,
+  }) async {
+    try {
+      await Future.delayed(const Duration(seconds: 1));
 
-  void dispose() {
-    _positionStreamController?.close();
+      return {
+        'success': true,
+        'message': 'Đã hủy đơn hàng thành công',
+        'data': {
+          'order_id': orderId,
+          'cancelled_at': DateTime.now().toIso8601String(),
+          'reason': reason,
+        }
+      };
+    } catch (e, stackTrace) {
+      logError('Error cancelling delivery', e, stackTrace);
+      return {
+        'success': false,
+        'message': 'Không th�� hủy đơn hàng: ${e.toString()}',
+      };
+    }
   }
 }

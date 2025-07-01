@@ -19,10 +19,11 @@ dependencies:
   http: ^1.2.0
   provider: ^6.1.5
   flutter_bluetooth_serial: ^0.4.0
-  # New dependencies for shipper functionality
+  # Dependencies for shipper functionality
   geolocator: ^11.0.0        # GPS tracking and location services
   url_launcher: ^6.2.5       # Phone calling and map opening
   image_picker: ^1.0.7       # Photo capture and gallery selection
+  webview_flutter: ^4.4.4    # WebView for Google Maps integration
 
 dev_dependencies:
   flutter_test:
