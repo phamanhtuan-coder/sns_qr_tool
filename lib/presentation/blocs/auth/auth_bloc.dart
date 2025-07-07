@@ -14,26 +14,15 @@ part 'auth_state.dart';
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthService _authService = getIt<AuthService>();
   DateTime? _lastLoginAttempt;
-  StreamSubscription? _tokenExpirySubscription;
   static const _loginDebounceTime = Duration(seconds: 1);
 
   AuthBloc() : super(const AuthState()) {
     print('DEBUG: Creating AuthBloc');
 
-    // Subscribe to token expiry warnings
-    _tokenExpirySubscription = _authService.tokenExpiryStream.listen(_handleTokenExpiry);
-
     on<LoginEvent>(_handleLoginEvent);
     on<CheckLoginStatus>(_handleCheckLoginStatus);
     on<LogoutEvent>(_handleLogoutEvent);
     on<TokenExpiringEvent>(_handleTokenExpiringEvent);
-  }
-
-  void _handleTokenExpiry(bool isExpiring) {
-    if (isExpiring) {
-      print('DEBUG: Token expiry warning received');
-      add(const TokenExpiringEvent());
-    }
   }
 
   Future<void> _handleLoginEvent(LoginEvent event, Emitter<AuthState> emit) async {
@@ -56,16 +45,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(error: null));
       }
 
-      // Call the auth service (no remember parameter)
-      final response = await _authService.login(
+      // Call the auth service
+      final userData = await _authService.login(
         event.username,
         event.password
       );
 
-      print('DEBUG: Login response received: $response');
+      print('DEBUG: Login response received: $userData');
 
-      if (response['success'] == true && response['user'] != null) {
-        final user = response['user'] as User;
+      if (userData != null) {
+        // Create User object from response data
+        final user = User(
+          name: userData['name'] ?? userData['username'] ?? event.username,
+          role: userData['role'] ?? 'Kỹ thuật viên',
+          department: userData['department'] ?? 'Sản xuất',
+        );
+
         print('DEBUG: Login successful - user: $user');
 
         // Update state with authenticated user
@@ -74,7 +69,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           user: user,
           error: null,
           isLoading: false,
-          showTokenWarning: false // Clear any token warnings
+          showTokenWarning: false
         ));
 
         // Handle navigation if context provided
@@ -83,12 +78,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           Navigator.of(event.context!).pushReplacementNamed(AppRouter.dashboard);
         }
       } else {
-        // Handle login failure - clear authentication state
-        print('DEBUG: Login failed - ${response['message']}');
+        // Handle login failure
+        print('DEBUG: Login failed - invalid credentials');
         emit(state.copyWith(
           isAuthenticated: false,
           user: null,
-          error: response['message'] ?? 'Đăng nhập thất bại',
+          error: 'Tên đăng nhập hoặc mật khẩu không đúng',
           isLoading: false
         ));
       }
@@ -112,21 +107,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(state.copyWith(isLoading: true));
 
     try {
+      final isLoggedIn = await _authService.isLoggedIn();
       final username = await _authService.getUsername();
-      print('DEBUG: Found stored username: $username');
+      final currentUser = await _authService.getCurrentUser();
 
-      // Get user object if it exists
-      final user = _authService.user;
+      print('DEBUG: isLoggedIn: $isLoggedIn, username: $username');
 
-      if (username != null) {
+      if (isLoggedIn && username != null) {
+        // Create User object from stored data or defaults
+        final user = User(
+          name: currentUser?['name'] ?? currentUser?['username'] ?? username,
+          role: currentUser?['role'] ?? 'Kỹ thuật viên',
+          department: currentUser?['department'] ?? 'Sản xuất',
+        );
+
         print('DEBUG: User is authenticated with stored credentials');
         emit(state.copyWith(
           isAuthenticated: true,
-          user: user ?? const User(
-            name: 'Người dùng',
-            role: 'Kỹ thuật viên',
-            department: 'Sản xuất',
-          ),
+          user: user,
           error: null,
           isLoading: false
         ));
@@ -193,11 +191,5 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         tokenWarningMessage: 'Phiên làm việc sắp hết hạn. Vui lòng đăng nhập lại để tiếp tục.'
       ));
     }
-  }
-
-  @override
-  Future<void> close() {
-    _tokenExpirySubscription?.cancel();
-    return super.close();
   }
 }

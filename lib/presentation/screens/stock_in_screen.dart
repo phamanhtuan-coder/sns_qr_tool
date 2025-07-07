@@ -141,6 +141,7 @@ class _StockInScreenState extends State<StockInScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -423,7 +424,7 @@ class _StockInScreenState extends State<StockInScreen> {
                 ),
                 icon: const Icon(Icons.add_circle_outline, size: 24),
                 label: const Text(
-                  'Bắt đầu đơn nhập',
+                  'Bắt đầu đơn nh��p',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,

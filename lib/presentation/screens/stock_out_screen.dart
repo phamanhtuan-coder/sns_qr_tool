@@ -141,6 +141,7 @@ class _StockOutScreenState extends State<StockOutScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -231,6 +232,7 @@ class _StockOutScreenState extends State<StockOutScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -278,6 +280,7 @@ class _StockOutScreenState extends State<StockOutScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -728,7 +731,7 @@ class _StockOutScreenState extends State<StockOutScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Chưa có thiết bị nào được quét',
+                    'Chưa có thi��t bị nào được quét',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
