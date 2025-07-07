@@ -22,8 +22,10 @@ class ApiClient {
 
   // Get the appropriate base URL for different API endpoints
   static String _getUrlForEndpoint(String endpoint) {
-    // Use SNS E-com backend for stock and shipper APIs
+    // Use SNS E-com backend for warehouse and stock operations
     if (endpoint.startsWith('/warehouse/') ||
+        endpoint.startsWith('/import-warehouse') ||
+        endpoint.startsWith('/export-warehouse') ||
         endpoint.startsWith('/stockin') ||
         endpoint.startsWith('/stockout') ||
         endpoint.startsWith('/stock') ||
@@ -33,7 +35,7 @@ class ApiClient {
       return _snsEcomUrl;
     }
 
-    // Use Railway URL for all other APIs (auth, etc.)
+    // Use Railway URL for all other APIs (auth, production tracking, etc.)
     print('DEBUG: Using Railway URL for endpoint: $endpoint');
     return _railwayUrl;
   }

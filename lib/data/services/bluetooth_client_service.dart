@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart' as fbs;
+import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import 'package:permission_handler/permission_handler.dart';
 
 enum ConnectionStatus {
@@ -20,13 +20,13 @@ enum AppBluetoothState {
   poweredOn,
 }
 
-class BluetoothDevice {
+class AppBluetoothDevice {
   final String name;
   final String address;
   final bool isBonded;
   final bool isConnected;
 
-  const BluetoothDevice({
+  const AppBluetoothDevice({
     required this.name,
     required this.address,
     required this.isBonded,
@@ -34,7 +34,7 @@ class BluetoothDevice {
   });
 
   @override
-  String toString() => 'BluetoothDevice(name: $name, address: $address, bonded: $isBonded)';
+  String toString() => 'AppBluetoothDevice(name: $name, address: $address, bonded: $isBonded)';
 }
 
 class BluetoothClientService {
@@ -48,22 +48,23 @@ class BluetoothClientService {
 
   final StreamController<ConnectionStatus> _connectionStatusController = StreamController<ConnectionStatus>.broadcast();
   final StreamController<AppBluetoothState> _bluetoothStateController = StreamController<AppBluetoothState>.broadcast();
-  final StreamController<List<BluetoothDevice>> _devicesController = StreamController<List<BluetoothDevice>>.broadcast();
+  final StreamController<List<AppBluetoothDevice>> _devicesController = StreamController<List<AppBluetoothDevice>>.broadcast();
 
   Stream<ConnectionStatus> get connectionStatus => _connectionStatusController.stream;
   Stream<AppBluetoothState> get bluetoothState => _bluetoothStateController.stream;
-  Stream<List<BluetoothDevice>> get devicesStream => _devicesController.stream;
+  Stream<List<AppBluetoothDevice>> get devicesStream => _devicesController.stream;
 
-  fbs.BluetoothConnection? _connection;
-  BluetoothDevice? _connectedDevice;
-  bool _isScanning = false;
-  List<BluetoothDevice> _discoveredDevices = [];
-  List<BluetoothDevice> _bondedDevices = [];
+  AppBluetoothDevice? _connectedDevice;
+  AppBluetoothDevice? _connectingDevice;
+  List<AppBluetoothDevice> _discoveredDevices = [];
+  List<AppBluetoothDevice> _bondedDevices = [];
+  StreamSubscription<fbp.BluetoothAdapterState>? _adapterStateSubscription;
+  StreamSubscription<List<fbp.ScanResult>>? _scanSubscription;
 
-  BluetoothDevice? get connectedDevice => _connectedDevice;
-  List<BluetoothDevice> get bondedDevices => _bondedDevices;
-  List<BluetoothDevice> get discoveredDevices => _discoveredDevices;
-  bool get isScanning => _isScanning;
+  AppBluetoothDevice? get connectedDevice => _connectedDevice;
+  List<AppBluetoothDevice> get bondedDevices => _bondedDevices;
+  List<AppBluetoothDevice> get discoveredDevices => _discoveredDevices;
+  bool get isScanning => _scanSubscription != null;
 
   Future<void> initialize() async {
     try {
@@ -79,31 +80,35 @@ class BluetoothClientService {
 
   Future<void> _checkBluetoothState() async {
     try {
-      final isEnabled = await fbs.FlutterBluetoothSerial.instance.isEnabled;
-      if (isEnabled == true) {
-        _bluetoothStateController.add(AppBluetoothState.poweredOn);
-      } else {
-        _bluetoothStateController.add(AppBluetoothState.poweredOff);
-      }
+      final adapterState = await fbp.FlutterBluePlus.adapterState.first;
+      _mapAdapterState(adapterState);
     } catch (e) {
       print('DEBUG: Error checking Bluetooth state: $e');
       _bluetoothStateController.add(AppBluetoothState.unavailable);
     }
   }
 
+  void _mapAdapterState(fbp.BluetoothAdapterState state) {
+    switch (state) {
+      case fbp.BluetoothAdapterState.on:
+        _bluetoothStateController.add(AppBluetoothState.poweredOn);
+        break;
+      case fbp.BluetoothAdapterState.off:
+        _bluetoothStateController.add(AppBluetoothState.poweredOff);
+        break;
+      case fbp.BluetoothAdapterState.unavailable:
+        _bluetoothStateController.add(AppBluetoothState.unavailable);
+        break;
+      case fbp.BluetoothAdapterState.unauthorized:
+        _bluetoothStateController.add(AppBluetoothState.unauthorized);
+        break;
+      default:
+        _bluetoothStateController.add(AppBluetoothState.unknown);
+    }
+  }
+
   void _listenToBluetoothState() {
-    fbs.FlutterBluetoothSerial.instance.onStateChanged().listen((state) {
-      switch (state) {
-        case fbs.BluetoothState.STATE_ON:
-          _bluetoothStateController.add(AppBluetoothState.poweredOn);
-          break;
-        case fbs.BluetoothState.STATE_OFF:
-          _bluetoothStateController.add(AppBluetoothState.poweredOff);
-          break;
-        default:
-          _bluetoothStateController.add(AppBluetoothState.unknown);
-      }
-    });
+    _adapterStateSubscription = fbp.FlutterBluePlus.adapterState.listen(_mapAdapterState);
   }
 
   Future<bool> requestPermissions() async {
@@ -130,11 +135,13 @@ class BluetoothClientService {
 
   Future<bool> enableBluetooth() async {
     try {
-      final isEnabled = await fbs.FlutterBluetoothSerial.instance.isEnabled;
-      if (isEnabled == true) return true;
-
-      final result = await fbs.FlutterBluetoothSerial.instance.requestEnable();
-      return result == true;
+      if (Platform.isAndroid) {
+        await fbp.FlutterBluePlus.turnOn();
+        // Check if Bluetooth is actually enabled after the request
+        final adapterState = await fbp.FlutterBluePlus.adapterState.first;
+        return adapterState == fbp.BluetoothAdapterState.on;
+      }
+      return true;
     } catch (e) {
       print('DEBUG: Error enabling Bluetooth: $e');
       return false;
@@ -143,12 +150,12 @@ class BluetoothClientService {
 
   Future<void> _loadBondedDevices() async {
     try {
-      final bondedDevices = await fbs.FlutterBluetoothSerial.instance.getBondedDevices();
-      _bondedDevices = bondedDevices.map((device) => BluetoothDevice(
-        name: device.name ?? 'Unknown Device',
-        address: device.address,
+      final bondedDevices = await fbp.FlutterBluePlus.bondedDevices;
+      _bondedDevices = bondedDevices.map((device) => AppBluetoothDevice(
+        name: device.platformName.isNotEmpty ? device.platformName : 'Unknown Device',
+        address: device.remoteId.str,
         isBonded: true,
-        isConnected: _connectedDevice?.address == device.address,
+        isConnected: _connectedDevice?.address == device.remoteId.str,
       )).toList();
 
       _devicesController.add(_bondedDevices);
@@ -159,60 +166,67 @@ class BluetoothClientService {
   }
 
   Future<void> startDiscovery() async {
-    if (_isScanning) return;
+    if (isScanning) return;
 
     try {
-      _isScanning = true;
       _discoveredDevices.clear();
-
       print('DEBUG: Starting Bluetooth device discovery');
 
-      fbs.FlutterBluetoothSerial.instance.startDiscovery().listen((device) {
-        final bluetoothDevice = BluetoothDevice(
-          name: device.device.name ?? 'Unknown Device',
-          address: device.device.address,
-          isBonded: device.device.isBonded,
-        );
+      _scanSubscription = fbp.FlutterBluePlus.scanResults.listen((results) {
+        for (final result in results) {
+          final device = result.device;
+          final bluetoothDevice = AppBluetoothDevice(
+            name: device.platformName.isNotEmpty ? device.platformName : 'Unknown Device',
+            address: device.remoteId.str,
+            isBonded: false,
+          );
 
-        // Add device if not already in list
-        if (!_discoveredDevices.any((d) => d.address == bluetoothDevice.address)) {
-          _discoveredDevices.add(bluetoothDevice);
-          _devicesController.add([..._bondedDevices, ..._discoveredDevices]);
+          // Add device if not already in list
+          if (!_discoveredDevices.any((d) => d.address == bluetoothDevice.address) &&
+              !_bondedDevices.any((d) => d.address == bluetoothDevice.address)) {
+            _discoveredDevices.add(bluetoothDevice);
+            _devicesController.add([..._bondedDevices, ..._discoveredDevices]);
+          }
         }
-      }).onDone(() {
-        _isScanning = false;
-        print('DEBUG: Device discovery completed');
       });
 
+      await fbp.FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+
     } catch (e) {
-      _isScanning = false;
       print('DEBUG: Error during device discovery: $e');
+      await stopDiscovery();
     }
   }
 
   Future<void> stopDiscovery() async {
-    if (!_isScanning) return;
+    if (!isScanning) return;
 
     try {
-      await fbs.FlutterBluetoothSerial.instance.cancelDiscovery();
-      _isScanning = false;
+      await fbp.FlutterBluePlus.stopScan();
+      await _scanSubscription?.cancel();
+      _scanSubscription = null;
       print('DEBUG: Device discovery stopped');
     } catch (e) {
       print('DEBUG: Error stopping discovery: $e');
     }
   }
 
-  Future<bool> connectToDevice(BluetoothDevice device) async {
+  Future<bool> connectToDevice(AppBluetoothDevice device) async {
     try {
       print('DEBUG: Connecting to device: ${device.name} (${device.address})');
       _connectionStatusController.add(ConnectionStatus.connecting);
+      _connectingDevice = device;
 
       // Disconnect from previous connection
       await disconnect();
 
-      _connection = await fbs.BluetoothConnection.toAddress(device.address);
-      _connectedDevice = device.copyWith(isConnected: true);
+      // Find the BluetoothDevice from flutter_blue_plus
+      final targetDevice = fbp.BluetoothDevice.fromId(device.address);
 
+      await targetDevice.connect(timeout: const Duration(seconds: 10));
+
+      _connectedDevice = device.copyWith(isConnected: true);
+      _connectingDevice = null;
       _connectionStatusController.add(ConnectionStatus.connected);
       await _loadBondedDevices(); // Refresh device list
 
@@ -220,13 +234,14 @@ class BluetoothClientService {
       return true;
     } catch (e) {
       print('DEBUG: Error connecting to device: $e');
+      _connectingDevice = null;
       _connectionStatusController.add(ConnectionStatus.error);
       return false;
     }
   }
 
   Future<bool> sendSerialToDesktop(String serialNumber) async {
-    if (_connection == null || _connectedDevice == null) {
+    if (_connectedDevice == null) {
       print('DEBUG: No active Bluetooth connection');
       return false;
     }
@@ -234,13 +249,26 @@ class BluetoothClientService {
     try {
       print('DEBUG: Sending serial number via Bluetooth: $serialNumber');
 
-      final data = '$serialNumber\n';
-      final dataBytes = Uint8List.fromList(data.codeUnits);
-      _connection!.output.add(dataBytes);
-      await _connection!.output.allSent;
+      // For flutter_blue_plus, we need to find services and characteristics
+      final targetDevice = fbp.BluetoothDevice.fromId(_connectedDevice!.address);
+      final services = await targetDevice.discoverServices();
 
-      print('DEBUG: Serial number sent successfully via Bluetooth');
-      return true;
+      // Look for a suitable characteristic to write to
+      // This is a simplified approach - you might need to adjust based on your specific device
+      for (final service in services) {
+        for (final characteristic in service.characteristics) {
+          if (characteristic.properties.write) {
+            final data = '$serialNumber\n';
+            final dataBytes = Uint8List.fromList(data.codeUnits);
+            await characteristic.write(dataBytes);
+            print('DEBUG: Serial number sent successfully via Bluetooth');
+            return true;
+          }
+        }
+      }
+
+      print('DEBUG: No writable characteristic found');
+      return false;
     } catch (e) {
       print('DEBUG: Error sending serial via Bluetooth: $e');
       return false;
@@ -249,9 +277,9 @@ class BluetoothClientService {
 
   Future<void> disconnect() async {
     try {
-      if (_connection != null) {
-        _connection!.dispose();
-        _connection = null;
+      if (_connectedDevice != null) {
+        final targetDevice = fbp.BluetoothDevice.fromId(_connectedDevice!.address);
+        await targetDevice.disconnect();
       }
 
       _connectedDevice = null;
@@ -266,20 +294,22 @@ class BluetoothClientService {
 
   void dispose() {
     disconnect();
+    stopDiscovery();
+    _adapterStateSubscription?.cancel();
     _connectionStatusController.close();
     _bluetoothStateController.close();
     _devicesController.close();
   }
 }
 
-extension BluetoothDeviceExtension on BluetoothDevice {
-  BluetoothDevice copyWith({
+extension AppBluetoothDeviceExtension on AppBluetoothDevice {
+  AppBluetoothDevice copyWith({
     String? name,
     String? address,
     bool? isBonded,
     bool? isConnected,
   }) {
-    return BluetoothDevice(
+    return AppBluetoothDevice(
       name: name ?? this.name,
       address: address ?? this.address,
       isBonded: isBonded ?? this.isBonded,

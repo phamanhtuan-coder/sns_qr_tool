@@ -18,7 +18,7 @@ class _BluetoothConnectionWidgetState extends State<BluetoothConnectionWidget> {
   final BluetoothClientService _bluetoothService = BluetoothClientService();
   ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
   AppBluetoothState _bluetoothState = AppBluetoothState.unknown;
-  List<BluetoothDevice> _devices = [];
+  List<AppBluetoothDevice> _devices = [];
   bool _isExpanded = false;
 
   @override
@@ -381,7 +381,7 @@ class _BluetoothConnectionWidgetState extends State<BluetoothConnectionWidget> {
     );
   }
 
-  Widget _buildDeviceItem(BluetoothDevice device) {
+  Widget _buildDeviceItem(AppBluetoothDevice device) {
     final isConnected = device.isConnected;
 
     return Container(
@@ -469,7 +469,7 @@ class _BluetoothConnectionWidgetState extends State<BluetoothConnectionWidget> {
     await _bluetoothService.startDiscovery();
   }
 
-  void _connectToDevice(BluetoothDevice device) async {
+  void _connectToDevice(AppBluetoothDevice device) async {
     final success = await _bluetoothService.connectToDevice(device);
     if (!success) {
       _showError('Không thể kết nối với ${device.name}');

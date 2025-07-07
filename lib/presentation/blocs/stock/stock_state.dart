@@ -1,9 +1,11 @@
+// Update the StockExportLoaded state in stock_state.dart
+
 import 'package:equatable/equatable.dart';
 import 'package:smart_net_qr_scanner/data/models/device.dart';
 import 'package:smart_net_qr_scanner/data/models/export_order.dart';
 import 'package:smart_net_qr_scanner/data/models/import_order.dart';
 import 'package:smart_net_qr_scanner/data/models/stock_order.dart';
-
+import 'package:smart_net_qr_scanner/data/models/enhanced_export_item.dart'; // Add this import
 
 abstract class StockState extends Equatable {
   const StockState();
@@ -103,28 +105,74 @@ class StockImportLoaded extends StockState {
   ];
 }
 
-// New state for export warehouse
+// Enhanced state for export warehouse with detailed item tracking
 class StockExportLoaded extends StockState {
   final List<ExportOrder> exportOrders;
   final ExportOrder? selectedExportOrder;
-  final List<ExportItem> scannedExportItems;
+  final List<EnhancedExportItem> scannedExportItems; // Changed to EnhancedExportItem
+  final Map<String, int> scannedItemsCounts; // Track counts by template_id
+  final Map<String, List<EnhancedExportItem>> groupedScannedItems; // Group by device type
 
   const StockExportLoaded({
     required this.exportOrders,
     this.selectedExportOrder,
     this.scannedExportItems = const [],
+    this.scannedItemsCounts = const {},
+    this.groupedScannedItems = const {},
   });
 
   StockExportLoaded copyWith({
     List<ExportOrder>? exportOrders,
     ExportOrder? selectedExportOrder,
-    List<ExportItem>? scannedExportItems,
+    List<EnhancedExportItem>? scannedExportItems,
+    Map<String, int>? scannedItemsCounts,
+    Map<String, List<EnhancedExportItem>>? groupedScannedItems,
   }) {
+    // Auto-calculate counts and grouping when items change
+    if (scannedExportItems != null) {
+      final newCounts = <String, int>{};
+      final newGrouped = <String, List<EnhancedExportItem>>{};
+
+      for (final item in scannedExportItems) {
+        // Count by template_id
+        newCounts[item.templateId] = (newCounts[item.templateId] ?? 0) + 1;
+
+        // Group by device type
+        newGrouped.putIfAbsent(item.deviceType, () => []).add(item);
+      }
+
+      return StockExportLoaded(
+        exportOrders: exportOrders ?? this.exportOrders,
+        selectedExportOrder: selectedExportOrder,
+        scannedExportItems: scannedExportItems,
+        scannedItemsCounts: newCounts,
+        groupedScannedItems: newGrouped,
+      );
+    }
+
     return StockExportLoaded(
       exportOrders: exportOrders ?? this.exportOrders,
       selectedExportOrder: selectedExportOrder,
       scannedExportItems: scannedExportItems ?? this.scannedExportItems,
+      scannedItemsCounts: scannedItemsCounts ?? this.scannedItemsCounts,
+      groupedScannedItems: groupedScannedItems ?? this.groupedScannedItems,
     );
+  }
+
+  // Helper methods
+  int getTotalScannedCount() => scannedExportItems.length;
+
+  int getScannedCountForTemplate(String templateId) =>
+      scannedItemsCounts[templateId] ?? 0;
+
+  List<EnhancedExportItem> getItemsForDeviceType(String deviceType) =>
+      groupedScannedItems[deviceType] ?? [];
+
+  List<String> getScannedDeviceTypes() => groupedScannedItems.keys.toList();
+
+  // Convert enhanced items back to original format for API calls
+  List<ExportItem> toOriginalExportItems() {
+    return scannedExportItems.map((item) => item.toExportItem()).toList();
   }
 
   @override
@@ -132,10 +180,12 @@ class StockExportLoaded extends StockState {
     exportOrders,
     selectedExportOrder,
     scannedExportItems,
+    scannedItemsCounts,
+    groupedScannedItems,
   ];
 }
-class StockError extends StockState {
 
+class StockError extends StockState {
   final String message;
 
   const StockError(this.message);

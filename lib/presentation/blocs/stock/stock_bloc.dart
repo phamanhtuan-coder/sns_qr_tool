@@ -1,5 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'dart:convert'; // Add this import for JSON parsing
 import 'package:smart_net_qr_scanner/data/models/device.dart';
 import 'package:smart_net_qr_scanner/data/models/stock_order.dart';
 import 'package:smart_net_qr_scanner/data/models/import_order.dart';
@@ -9,6 +11,9 @@ import 'package:smart_net_qr_scanner/data/services/import_warehouse_service.dart
 import 'package:smart_net_qr_scanner/data/services/export_warehouse_service.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_state.dart';
 import 'package:smart_net_qr_scanner/utils/logger.dart';
+
+import '../../../data/models/enhanced_export_item.dart';
+import '../../../utils/app_colors.dart';
 
 part 'stock_event.dart';
 
@@ -78,7 +83,8 @@ class StockBloc extends Bloc<StockEvent, StockState> {
   Future<void> _onScanDevice(
       ScanDevice event,
       Emitter<StockState> emit,
-      ) async {
+      ) async
+  {
     if (state is! StockLoaded) return;
 
     final currentState = state as StockLoaded;
@@ -129,27 +135,78 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     }
   }
 
-  Future<void> _onCompleteOrder(
-      CompleteOrder event,
+  Future<void> _onCompleteExportOrder(
+      CompleteExportOrder event,
       Emitter<StockState> emit,
       ) async {
-    if (state is! StockLoaded) return;
+    if (state is! StockExportLoaded) return;
 
-    final currentState = state as StockLoaded;
+    final currentState = state as StockExportLoaded;
+    final selectedOrder = currentState.selectedExportOrder;
+
+    if (selectedOrder == null) {
+      emit(const StockError('Chưa chọn đơn xuất'));
+      return;
+    }
+
+    if (currentState.scannedExportItems.isEmpty) {
+      emit(const StockError('Chưa quét thiết bị nào'));
+      return;
+    }
 
     try {
-      await Future.delayed(const Duration(seconds: 1));
+      emit(const StockLoading());
 
-      emit(currentState.copyWith(
-        selectedOrder: null,
-        scannedItems: {},
-        scannedCounts: {},
-        scannedDevices: [],
-        isOrderComplete: false,
-      ));
+      // Group enhanced items by template_id for API call
+      final Map<String, List<EnhancedExportItem>> groupedItems = {};
+      for (final item in currentState.scannedExportItems) {
+        groupedItems.putIfAbsent(item.templateId, () => []).add(item);
+      }
+
+      // Convert to API format
+      final List<Map<String, dynamic>> listProduct = [];
+      groupedItems.forEach((templateId, items) {
+        listProduct.add({
+          'template_id': templateId,
+          'list_serial': items.map((item) => {
+            'batch_production_id': item.batchProductionId,
+            'serial_number': item.serialNumber,
+          }).toList(),
+          'quantity': items.length,
+        });
+      });
+
+      print('DEBUG: Completing export order with grouped data:');
+      print('Template groups: ${groupedItems.keys.toList()}');
+      print('Total items: ${currentState.scannedExportItems.length}');
+
+      for (final entry in groupedItems.entries) {
+        print('Template ${entry.key}: ${entry.value.length} items');
+        print('Device types: ${entry.value.map((e) => e.deviceType).toSet().toList()}');
+      }
+
+      final result = await _exportWarehouseService.completeExportOrder(
+        exportId: selectedOrder.exportNumber,
+        orderId: selectedOrder.id,
+        listProduct: listProduct,
+      );
+
+      if (result['success']) {
+        // Reset state to show completed order
+        emit(StockExportLoaded(
+          exportOrders: currentState.exportOrders,
+          selectedExportOrder: null, // Clear selection
+          scannedExportItems: const [],
+        ));
+
+        // Optionally reload orders to get updated status
+        add(const LoadExportOrders());
+      } else {
+        emit(StockError(result['message'] ?? 'Không thể hoàn thành đơn xuất'));
+      }
     } catch (e, stackTrace) {
-      logError('Lỗi hoàn thành đơn hàng', e, stackTrace);
-      emit(StockError('Không thể hoàn thành đơn hàng: ${e.toString()}'));
+      logError('Lỗi hoàn thành đơn xuất', e, stackTrace);
+      emit(StockError('Không thể hoàn thành đơn xuất: ${e.toString()}'));
     }
   }
 
@@ -242,11 +299,6 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     final currentState = state as StockImportLoaded;
     final selectedOrder = currentState.selectedImportOrder;
 
-    if (selectedOrder == null) {
-      emit(const StockError('Chưa chọn đơn nhập'));
-      return;
-    }
-
     try {
       final deviceInfo = _parseQRData(event.qrData);
 
@@ -255,8 +307,29 @@ class StockBloc extends Bloc<StockEvent, StockState> {
         return;
       }
 
+      // Use import_id from QR if available, otherwise use selected order
+      String importIdToUse;
+      if (deviceInfo['import_id']?.isNotEmpty == true) {
+        importIdToUse = deviceInfo['import_id']!;
+        print('DEBUG: Using import_id from QR: $importIdToUse');
+
+        // Validate that QR import_id matches selected order (if order is selected)
+        if (selectedOrder != null && selectedOrder.id != importIdToUse) {
+          emit(StockError('Mã đơn nhập trong QR (${importIdToUse}) không khớp với đơn đã chọn (${selectedOrder.id})'));
+          return;
+        }
+      } else {
+        // Fallback to selected order
+        if (selectedOrder == null) {
+          emit(const StockError('Chưa chọn đơn nhập và QR không chứa mã đơn nhập'));
+          return;
+        }
+        importIdToUse = selectedOrder.id;
+        print('DEBUG: Using selected order import_id: $importIdToUse');
+      }
+
       final result = await _importWarehouseService.importOrderItem(
-        importId: selectedOrder.id,
+        importId: importIdToUse,
         serialNumber: deviceInfo['serial_number']!,
         batchProductionId: deviceInfo['batch_production_id']!,
         templateId: deviceInfo['template_id']!,
@@ -265,7 +338,7 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       if (result['success']) {
         final newScannedItems = List<ImportOrderItem>.from(currentState.scannedImportItems);
         newScannedItems.add(ImportOrderItem(
-          importId: selectedOrder.id,
+          importId: importIdToUse,
           serialNumber: deviceInfo['serial_number']!,
           batchProductionId: deviceInfo['batch_production_id']!,
           templateId: deviceInfo['template_id']!,
@@ -351,15 +424,16 @@ class StockBloc extends Bloc<StockEvent, StockState> {
         scannedExportItems: [],
       ));
     } catch (e, stackTrace) {
-      logError('Lỗi chọn đơn xuất', e, stackTrace);
+      logError('Lỗi ch���n đơn xuất', e, stackTrace);
       emit(StockError('Không thể chọn đơn xuất: ${e.toString()}'));
     }
   }
 
+
   Future<void> _onScanExportDevice(
-    ScanExportDevice event,
-    Emitter<StockState> emit,
-  ) async {
+      ScanExportDevice event,
+      Emitter<StockState> emit,
+      ) async {
     if (state is! StockExportLoaded) return;
 
     final currentState = state as StockExportLoaded;
@@ -378,22 +452,47 @@ class StockBloc extends Bloc<StockEvent, StockState> {
         return;
       }
 
+      // Check if this device was already scanned
+      final alreadyScanned = currentState.scannedExportItems.any(
+            (item) => item.serialNumber == deviceInfo['serial_number'],
+      );
+
+      if (alreadyScanned) {
+        emit(const StockError('Thiết bị này đã được quét'));
+        return;
+      }
+
+      // Use the enhanced scan export device service
       final result = await _exportWarehouseService.scanExportDevice(
         selectedOrder.id,
         deviceInfo['serial_number']!,
       );
 
       if (result['success']) {
-        final newScannedItems = List<ExportItem>.from(currentState.scannedExportItems);
-        newScannedItems.add(ExportItem(
+        final deviceDetails = result['data'];
+
+        // Create enhanced export item
+        final enhancedExportItem = EnhancedExportItem(
           serialNumber: deviceInfo['serial_number']!,
           templateId: deviceInfo['template_id']!,
           batchProductionId: deviceInfo['batch_production_id']!,
-        ));
+          deviceType: deviceDetails?['device_type'] ??
+              EnhancedExportItem.getDefaultDeviceType(deviceInfo['template_id']!),
+          productName: deviceDetails?['product_name'] ?? 'Product ${deviceInfo['template_id']}',
+          productImage: deviceDetails?['product_image'],
+          status: deviceDetails?['status'] ?? 'scanned',
+          scannedAt: DateTime.now(),
+        );
+
+        final newScannedItems = List<EnhancedExportItem>.from(currentState.scannedExportItems);
+        newScannedItems.add(enhancedExportItem);
 
         emit(currentState.copyWith(
           scannedExportItems: newScannedItems,
         ));
+
+        // Note: Success feedback should be handled by the UI layer
+        print('DEBUG: Successfully scanned: ${enhancedExportItem.deviceType} - ${enhancedExportItem.serialNumber}');
       } else {
         emit(StockError(result['message'] ?? 'Lỗi quét thiết bị xuất'));
       }
@@ -403,74 +502,59 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     }
   }
 
-  Future<void> _onCompleteExportOrder(
-    CompleteExportOrder event,
+  Future<void> _onCompleteOrder(
+    CompleteOrder event,
     Emitter<StockState> emit,
   ) async {
-    if (state is! StockExportLoaded) return;
+    if (state is! StockLoaded) return;
 
-    final currentState = state as StockExportLoaded;
-    final selectedOrder = currentState.selectedExportOrder;
+    final currentState = state as StockLoaded;
+    final selectedOrder = currentState.selectedOrder;
 
     if (selectedOrder == null) {
-      emit(const StockError('Chưa chọn đơn xuất'));
-      return;
-    }
-
-    if (currentState.scannedExportItems.isEmpty) {
-      emit(const StockError('Chưa quét thiết bị nào'));
+      emit(const StockError('Chưa chọn đơn hàng'));
       return;
     }
 
     try {
       emit(const StockLoading());
 
-      final Map<String, List<ExportItem>> groupedItems = {};
-      for (final item in currentState.scannedExportItems) {
-        groupedItems.putIfAbsent(item.templateId, () => []).add(item);
-      }
-
-      final List<Map<String, dynamic>> listProduct = [];
-      groupedItems.forEach((templateId, items) {
-        listProduct.add({
-          'template_id': templateId,
-          'list_serial': items.map((item) => {
-            'batch_production_id': item.batchProductionId,
-            'serial_number': item.serialNumber,
-          }).toList(),
-          'quantity': items.length,
-        });
-      });
-
-      final result = await _exportWarehouseService.completeExportOrder(
-        exportId: selectedOrder.exportNumber,
-        orderId: selectedOrder.id,
-        listProduct: listProduct,
-      );
-
-      if (result['success']) {
-        emit(const StockExportLoaded(exportOrders: []));
-      } else {
-        emit(StockError(result['message'] ?? 'Không thể hoàn thành đơn xuất'));
-      }
+      // Simple completion logic: just mark the order as complete
+      emit(currentState.copyWith(
+        isOrderComplete: true,
+      ));
     } catch (e, stackTrace) {
-      logError('Lỗi ho��n thành đơn xuất', e, stackTrace);
-      emit(StockError('Không thể hoàn thành đơn xuất: ${e.toString()}'));
+      logError('Lỗi hoàn thành đơn hàng', e, stackTrace);
+      emit(StockError('Không thể hoàn thành đơn hàng: ${e.toString()}'));
     }
   }
 
   Map<String, String>? _parseQRData(String qrData) {
     try {
+      // Check for JSON format
+      if (qrData.startsWith('{') && qrData.endsWith('}')) {
+        final jsonData = json.decode(qrData);
+        return {
+          'import_id': jsonData['import_id'] ?? '',
+          'serial_number': jsonData['serial_number'] ?? '',
+          'template_id': jsonData['template_id'] ?? '',
+          'batch_production_id': jsonData['batch_production_id'] ?? '',
+        };
+      }
+
+      // Fallback to pipe-separated format
       if (qrData.contains('|')) {
         final parts = qrData.split('|');
         if (parts.length >= 3) {
           return {
+            'import_id': '', // Not available in pipe format
             'serial_number': parts[0],
             'template_id': parts[1],
             'batch_production_id': parts[2],
           };
         }
       }
+
       return null;
     } catch (e) {
       logError('Lỗi phân tích mã QR', e, null);
