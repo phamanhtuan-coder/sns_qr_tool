@@ -57,8 +57,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         // Create User object from response data
         final user = User(
           name: userData['name'] ?? userData['username'] ?? event.username,
-          role: userData['role'] ?? 'Kỹ thuật viên',
-          department: userData['department'] ?? 'Sản xuất',
+          role: userData['role'] ?? 'Admin',
+          department: userData['department'] ?? 'IT',
         );
 
         print('DEBUG: Login successful - user: $user');
@@ -78,12 +78,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           Navigator.of(event.context!).pushReplacementNamed(AppRouter.dashboard);
         }
       } else {
-        // Handle login failure
-        print('DEBUG: Login failed - invalid credentials');
+        // Handle login failure - provide more specific error message
+        print('DEBUG: Login failed - credentials invalid or API error');
         emit(state.copyWith(
           isAuthenticated: false,
           user: null,
-          error: 'Tên đăng nhập hoặc mật khẩu không đúng',
+          error: 'Sai tên đăng nhập hoặc mật khẩu. Vui lòng kiểm tra lại.',
           isLoading: false
         ));
       }
@@ -91,11 +91,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       print('DEBUG: Login error: $e');
       logError('Lỗi xử lý sự kiện LoginEvent', e, stackTrace);
 
-      // Return error state
+      // Return error state with more specific message
+      String errorMessage = 'Có lỗi xảy ra khi đăng nhập';
+      if (e.toString().contains('SocketException') || e.toString().contains('TimeoutException')) {
+        errorMessage = 'Không thể kết nối tới máy chủ. Vui lòng kiểm tra mạng.';
+      } else if (e.toString().contains('FormatException')) {
+        errorMessage = 'Lỗi định dạng dữ liệu từ máy chủ.';
+      }
+
       emit(state.copyWith(
         isAuthenticated: false,
         user: null,
-        error: 'Có lỗi xảy ra, vui lòng thử lại',
+        error: errorMessage,
         isLoading: false
       ));
     }

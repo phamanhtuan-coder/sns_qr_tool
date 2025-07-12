@@ -1,4 +1,5 @@
 import 'api_client.dart';
+import 'package:smart_net_qr_scanner/data/models/qr_data.dart';
 
 class ImportWarehouseService {
   final ApiClient _apiClient;
@@ -92,22 +93,20 @@ class ImportWarehouseService {
     }
   }
 
-  /// Import order item
-  Future<Map<String, dynamic>> importOrderItem({
+  /// Import order item using QR data
+  Future<Map<String, dynamic>> importOrderItemFromQr({
     required String importId,
-    required String serialNumber,
-    required String batchProductionId,
-    required String templateId,
+    required QrData qrData,
   }) async {
     try {
-      print('DEBUG: Importing order item - ImportID: $importId, Serial: $serialNumber');
+      print('DEBUG: Importing order item from QR - ImportID: $importId, QR Data: $qrData');
       final result = await _apiClient.post(
         '/import-warehouse/import-order',
         {
           'import_id': importId,
-          'serial_number': serialNumber,
-          'batch_production_id': batchProductionId,
-          'template_id': templateId,
+          'serial_number': qrData.serialNumber,
+          'batch_production_id': qrData.batchProductionId,
+          'template_id': qrData.templateId,
         },
       );
 
@@ -125,12 +124,27 @@ class ImportWarehouseService {
         };
       }
     } catch (e) {
-      print('DEBUG: Error in importOrderItem: $e');
+      print('DEBUG: Error in importOrderItemFromQr: $e');
       return {
         'success': false,
         'message': 'Lỗi kết nối: ${e.toString()}',
       };
     }
+  }
+
+  /// Import order item (legacy method - for backward compatibility)
+  Future<Map<String, dynamic>> importOrderItem({
+    required String importId,
+    required String serialNumber,
+    required String batchProductionId,
+    required String templateId,
+  }) async {
+    final qrData = QrData(
+      serialNumber: serialNumber,
+      batchProductionId: batchProductionId,
+      templateId: templateId,
+    );
+    return importOrderItemFromQr(importId: importId, qrData: qrData);
   }
 
   void dispose() {

@@ -12,17 +12,59 @@ class AuthService {
   Future<Map<String, dynamic>?> login(String username, String password) async {
     try {
       final apiClient = GetIt.instance<ApiClient>();
-      final response = await apiClient.post('/auth/login', {
+      final response = await apiClient.post('/auth/employee/login', {
         'username': username,
         'password': password,
       });
 
-      if (response['success'] == true) {
-        final token = response['data']['token'];
-        final userData = response['data']['user'];
+      print('DEBUG: Login API full response: $response');
 
-        await _saveAuthData(token, userData, username);
-        return userData;
+      // Handle successful API call first
+      if (response['success'] == true && response['data'] != null) {
+        // This handles wrapper format: { success: true, data: { accessToken, employeeId } }
+        final data = response['data'];
+        if (data['accessToken'] != null && data['employeeId'] != null) {
+          final token = data['accessToken'];
+          final employeeId = data['employeeId'];
+
+          final userData = {
+            'employeeId': employeeId,
+            'username': username,
+            'name': employeeId,
+            'role': 'Admin',
+            'department': 'IT',
+          };
+
+          await _saveAuthData(token, userData, username);
+          return userData;
+        }
+      }
+
+      // Handle direct response format: { accessToken, employeeId, refreshToken }
+      else if (response['data'] != null) {
+        final data = response['data'];
+        if (data['accessToken'] != null && data['employeeId'] != null) {
+          final token = data['accessToken'];
+          final employeeId = data['employeeId'];
+
+          final userData = {
+            'employeeId': employeeId,
+            'username': username,
+            'name': employeeId,
+            'role': 'Admin',
+            'department': 'IT',
+          };
+
+          await _saveAuthData(token, userData, username);
+          return userData;
+        }
+      }
+
+      // Log the specific error if available
+      if (response['success'] == false) {
+        print('DEBUG: Login failed with API error: ${response['message']}');
+      } else {
+        print('DEBUG: Login failed - unexpected response format');
       }
 
       return null;

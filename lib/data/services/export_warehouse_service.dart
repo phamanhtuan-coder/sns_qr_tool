@@ -1,4 +1,5 @@
 import 'package:smart_net_qr_scanner/data/services/api_client.dart';
+import 'package:smart_net_qr_scanner/data/models/qr_data.dart';
 import 'package:smart_net_qr_scanner/utils/logger.dart';
 
 class ExportWarehouseService {
@@ -354,5 +355,59 @@ class ExportWarehouseService {
         'message': 'Lỗi kết nối: ${e.toString()}',
       };
     }
+  }
+
+  /// Export order item using QR data
+  Future<Map<String, dynamic>> exportOrderItemFromQr({
+    required String exportId,
+    required QrData qrData,
+  }) async {
+    try {
+      print('DEBUG: Exporting order item from QR - ExportID: $exportId, QR Data: $qrData');
+      final result = await _apiClient.post(
+        '/export-warehouse/export-order',
+        {
+          'export_id': exportId,
+          'serial_number': qrData.serialNumber,
+          'batch_production_id': qrData.batchProductionId,
+          'template_id': qrData.templateId,
+        },
+      );
+
+      print('DEBUG: Export order item response: $result');
+
+      if (result['success'] == true) {
+        return {
+          'success': true,
+          'data': result['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': result['message'] ?? 'Không thể xuất thiết bị',
+        };
+      }
+    } catch (e) {
+      print('DEBUG: Error in exportOrderItemFromQr: $e');
+      return {
+        'success': false,
+        'message': 'Lỗi kết nối: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Export order item (legacy method - for backward compatibility)
+  Future<Map<String, dynamic>> exportOrderItem({
+    required String exportId,
+    required String serialNumber,
+    required String batchProductionId,
+    required String templateId,
+  }) async {
+    final qrData = QrData(
+      serialNumber: serialNumber,
+      batchProductionId: batchProductionId,
+      templateId: templateId,
+    );
+    return exportOrderItemFromQr(exportId: exportId, qrData: qrData);
   }
 }

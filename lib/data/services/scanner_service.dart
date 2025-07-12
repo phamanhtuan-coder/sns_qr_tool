@@ -1,12 +1,13 @@
 import 'package:permission_handler/permission_handler.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:smart_net_qr_scanner/data/models/qr_data.dart';
 import 'dart:async';
 
 class ScannerService {
   final MobileScannerController controller = MobileScannerController();
-  final StreamController<String> _scannedSerialController = StreamController<String>.broadcast();
+  final StreamController<QrData> _scannedDataController = StreamController<QrData>.broadcast();
 
-  Stream<String> get onSerialScanned => _scannedSerialController.stream;
+  Stream<QrData> get onQrDataScanned => _scannedDataController.stream;
 
   Future<Map<String, dynamic>> requestCameraPermission() async {
     var status = await Permission.camera.status;
@@ -60,14 +61,19 @@ class ScannerService {
 
   void onBarcodeDetected(Barcode barcode) {
     if (barcode.rawValue != null) {
-      final serialNumber = barcode.rawValue!;
-      _scannedSerialController.add(serialNumber);
+      final qrRawData = barcode.rawValue!;
+      print('DEBUG: Raw QR data: $qrRawData');
+
+      // Parse the QR data (handles both JSON format and legacy string format)
+      final qrData = QrData.fromJsonString(qrRawData);
+      print('DEBUG: Parsed QR data: $qrData');
+
+      _scannedDataController.add(qrData);
     }
   }
 
   void dispose() {
     controller.dispose();
-    _scannedSerialController.close();
+    _scannedDataController.close();
   }
 }
-
