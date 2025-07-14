@@ -87,7 +87,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           'message': 'Đã quét thiết bị thành công',
           'details': {'device_serial': event.data},
           'actions': event.purpose == 'firmware'
-              ? const ['retry', 'submit', 'send_to_device']
+              ? const ['retry', 'call_api', 'send_to_device'] // Updated firmware actions
               : const ['retry', 'submit'],
         }));
       } catch (e, stackTrace) {
@@ -146,6 +146,93 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
 
     on<ResetScanner>((event, emit) {
       emit(const ScannerInitial());
+    });
+
+    // Add handler for CallApiOnly event
+    on<CallApiOnly>((event, emit) async {
+      print("DEBUG: CallApiOnly event received with serialNumber: ${event.serialNumber}, functionId: ${event.functionId}");
+      try {
+        if (event.serialNumber.isEmpty) {
+          print("DEBUG: Empty serial number");
+          emit(const ScannerFailure(error: {
+            'title': 'Lỗi dữ liệu',
+            'message': 'Không có thông tin thiết bị để gửi.',
+            'details': {'errorCode': 'DATA-001', 'reason': 'Empty serial number', 'actions': ['retry', 'dashboard']},
+          }));
+          return;
+        }
+
+        if (state is! ScannerSuccess) return;
+        final currentState = state as ScannerSuccess;
+
+        // Set loading state for API only
+        emit(currentState.copyWith(
+          isApiLoading: true,
+        ));
+
+        // Dynamic timeout based on context
+        final timeoutDuration = _getTimeoutDuration(event.functionId);
+        bool timeoutOccurred = false;
+        final timeoutFuture = Future.delayed(timeoutDuration, () {
+          timeoutOccurred = true;
+          return {'success': false, 'message': 'Hết thời gian chờ phản hồi từ máy chủ'};
+        });
+
+        // Call API to update serial
+        final resultFuture = _productionService.processScannedSerial(
+          event.serialNumber,
+          functionId: event.functionId,
+        );
+
+        // Wait for result or timeout
+        final result = await Future.any([resultFuture, timeoutFuture]);
+
+        String? apiError;
+        if (timeoutOccurred) {
+          apiError = 'Hết thời gian chờ phản hồi từ máy chủ';
+        } else if (!result['success']) {
+          apiError = result['message'] ?? 'Không thể cập nhật thông tin thiết bị';
+        }
+
+        // Update state based on API result
+        emit(currentState.copyWith(
+          isApiLoading: false,
+          apiError: apiError,
+          result: {
+            ...currentState.result,
+            'details': {
+              ...currentState.result['details'] as Map<String, dynamic>,
+              'api_status': apiError == null ? 'Thành công' : 'Thất bại',
+              if (apiError == null && result['data'] != null) ...{
+                'stage': result['data']['stage'] ?? 'Unknown',
+                'status': result['data']['status'] ?? 'Unknown',
+              },
+            },
+          },
+        ));
+      } catch (e, stackTrace) {
+        print("DEBUG: Exception in CallApiOnly handler: $e");
+        logError('Lỗi xử lý sự kiện CallApiOnly', e, stackTrace);
+
+        if (state is ScannerSuccess) {
+          final currentState = state as ScannerSuccess;
+          emit(currentState.copyWith(
+            isApiLoading: false,
+            apiError: 'Lỗi hệ thống: ${e.toString()}',
+          ));
+        } else {
+          emit(ScannerFailure(error: {
+            'title': 'Lỗi hệ thống',
+            'message': 'Đã xảy ra lỗi khi cập nhật thông tin thiết bị.',
+            'details': {
+              'errorCode': 'SYS-004',
+              'reason': e.toString(),
+              'device_serial': event.serialNumber,
+              'actions': const ['retry', 'dashboard']
+            },
+          }));
+        }
+      }
     });
 
     on<SendToDeviceOnly>((event, emit) async {

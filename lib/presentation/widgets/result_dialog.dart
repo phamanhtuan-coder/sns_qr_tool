@@ -16,6 +16,7 @@ class ResultDialog extends StatefulWidget {
   final VoidCallback? onRetry;
   final VoidCallback? onDashboard;
   final VoidCallback? onSendToDevice;
+  final VoidCallback? onCallApi; // Add new callback for API-only calls
   final bool isLoading;
   final bool isApiLoading;
   final bool isBluetoothLoading;
@@ -35,6 +36,7 @@ class ResultDialog extends StatefulWidget {
     this.onRetry,
     this.onDashboard,
     this.onSendToDevice,
+    this.onCallApi, // Add to constructor
     this.isLoading = false,
     this.isApiLoading = false,
     this.isBluetoothLoading = false,
@@ -438,7 +440,7 @@ class _ResultDialogState extends State<ResultDialog> {
       ),
       child: Column(
         children: [
-          // First row of buttons
+          // First row of buttons - Always shown for basic actions
           Row(
             children: [
               // Button 1: Scan Again (Quét lại) - Always shown
@@ -493,42 +495,36 @@ class _ResultDialogState extends State<ResultDialog> {
             ],
           ),
 
-          // Second row of buttons - shown only in specific modes
+          // Second row of buttons - shown for firmware mode or when submit action exists
           if (isFirmwareMode || widget.onSubmit != null)
             const SizedBox(height: 12),
 
-          // Show action buttons for firmware mode
+          // Show action buttons for firmware mode with three separate buttons
           if (isFirmwareMode)
-            Row(
+            Column(
               children: [
-                // Button 3: Send to Device (Only show in firmware mode)
-                Expanded(
-                  child: _buildLoadingButton(
-                    context: context,
-                    isLoading: _isBluetoothLoading && !_isApiLoading,
-                    loadingText: 'Đang kết nối...',
-                    normalText: 'Gửi tới thiết bị',
-                    onPressed: hasBluetoothError || isAnyLoading ? null : widget.onSendToDevice,
-                    backgroundColor: const Color(0xFF9333EA), // Màu tím cho bluetooth
-                    icon: Icons.bluetooth,
-                  ),
+                // Row 1: Call API button
+                _buildLoadingButton(
+                  context: context,
+                  isLoading: _isApiLoading && !_isBluetoothLoading,
+                  loadingText: 'Đang gọi API...',
+                  normalText: 'Cập nhật thông tin',
+                  onPressed: hasApiError || isAnyLoading ? null : widget.onCallApi,
+                  backgroundColor: AppColors.primary,
+                  icon: Icons.cloud_upload,
                 ),
 
-                const SizedBox(width: 12),
+                const SizedBox(height: 12),
 
-                // Button 4: Confirm - Calls API and then sends data to device in firmware mode
-                Expanded(
-                  child: _buildLoadingButton(
-                    context: context,
-                    isLoading: _isApiLoading || _isBluetoothLoading,
-                    loadingText: (_isApiLoading && _isBluetoothLoading) ?
-                                'Đang xử lý...' :
-                                (_isApiLoading ? 'Đang gửi API...' : 'Đang kết nối...'),
-                    normalText: 'Xác nhận',
-                    onPressed: hasApiError || hasBluetoothError || isAnyLoading ? null : widget.onSubmit,
-                    backgroundColor: AppColors.primary,
-                    icon: Icons.check_circle,
-                  ),
+                // Row 2: Send to device button
+                _buildLoadingButton(
+                  context: context,
+                  isLoading: _isBluetoothLoading && !_isApiLoading,
+                  loadingText: 'Đang kết nối...',
+                  normalText: 'Gửi tới thiết bị',
+                  onPressed: hasBluetoothError || isAnyLoading ? null : widget.onSendToDevice,
+                  backgroundColor: const Color(0xFF9333EA), // Màu tím cho bluetooth
+                  icon: Icons.bluetooth,
                 ),
               ],
             )
@@ -560,11 +556,23 @@ class _ResultDialogState extends State<ResultDialog> {
 
   List<MapEntry<String, String>> _formatDetails() {
     final formattedDetails = <MapEntry<String, String>>[];
-    final allowedKeys = ['device_serial', 'stage', 'status'];
+    // Updated allowed keys to include new QR data fields
+    final allowedKeys = [
+      'device_serial',
+      'serial_number',
+      'batch_production_id',
+      'template_id',
+      'template_name',
+      'stage',
+      'status'
+    ];
 
     widget.details.forEach((key, value) {
       // Only show allowed keys
       if (!allowedKeys.contains(key)) return;
+
+      // Skip empty template_name values to avoid showing empty entries
+      if (key == 'template_name' && (value.isEmpty || value == 'null')) return;
 
       // Format keys for display
       String displayKey = key
@@ -574,6 +582,31 @@ class _ResultDialogState extends State<ResultDialog> {
           .split(' ')
           .map((word) => word.substring(0, 1).toUpperCase() + word.substring(1))
           .join(' ');
+
+      // Custom display names for specific keys
+      switch (key) {
+        case 'serial_number':
+          displayKey = 'Số seri';
+          break;
+        case 'batch_production_id':
+          displayKey = 'Mã lô sản xuất';
+          break;
+        case 'template_id':
+          displayKey = 'Mã template';
+          break;
+        case 'template_name':
+          displayKey = 'Tên template';
+          break;
+        case 'device_serial':
+          displayKey = 'Serial thiết bị';
+          break;
+        case 'stage':
+          displayKey = 'Giai đoạn';
+          break;
+        case 'status':
+          displayKey = 'Trạng thái';
+          break;
+      }
 
       // Format values for display
       String displayValue = value;

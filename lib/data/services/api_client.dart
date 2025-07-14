@@ -102,7 +102,9 @@ class ApiClient {
         return true; // Consider it successful if there's no token to invalidate
       }
 
-      final url = Uri.parse('$_baseUrl/auth/employee/logout');
+      // Use the appropriate URL for logout endpoint
+      final targetUrl = _getUrlForEndpoint('/auth/employee/logout');
+      final url = Uri.parse('$targetUrl/auth/employee/logout');
       final response = await _client.post(
         url,
         headers: {

@@ -4,11 +4,13 @@ class QrData {
   final String serialNumber;
   final String batchProductionId;
   final String templateId;
+  final String? templateName; // Add template_name field (nullable)
 
   const QrData({
     required this.serialNumber,
     required this.batchProductionId,
     required this.templateId,
+    this.templateName,
   });
 
   factory QrData.fromJson(Map<String, dynamic> json) {
@@ -16,6 +18,7 @@ class QrData {
       serialNumber: json['serial_number'] ?? '',
       batchProductionId: json['batch_production_id'] ?? '',
       templateId: json['template_id'] ?? '',
+      templateName: json['template_name'], // Can be null
     );
   }
 
@@ -30,6 +33,7 @@ class QrData {
         serialNumber: jsonString,
         batchProductionId: '',
         templateId: '',
+        templateName: null,
       );
     }
   }
@@ -39,6 +43,7 @@ class QrData {
       'serial_number': serialNumber,
       'batch_production_id': batchProductionId,
       'template_id': templateId,
+      if (templateName != null) 'template_name': templateName,
     };
   }
 
@@ -56,8 +61,11 @@ class QrData {
       batchProductionId.isEmpty &&
       templateId.isEmpty;
 
+  // Get display name for template (empty string if null)
+  String get displayTemplateName => templateName ?? '';
+
   @override
-  String toString() => 'QrData(serial: $serialNumber, batch: $batchProductionId, template: $templateId)';
+  String toString() => 'QrData(serial: $serialNumber, batch: $batchProductionId, template: $templateId, templateName: $templateName)';
 
   @override
   bool operator ==(Object other) =>
@@ -66,11 +74,13 @@ class QrData {
           runtimeType == other.runtimeType &&
           serialNumber == other.serialNumber &&
           batchProductionId == other.batchProductionId &&
-          templateId == other.templateId;
+          templateId == other.templateId &&
+          templateName == other.templateName;
 
   @override
   int get hashCode =>
       serialNumber.hashCode ^
       batchProductionId.hashCode ^
-      templateId.hashCode;
+      templateId.hashCode ^
+      templateName.hashCode;
 }

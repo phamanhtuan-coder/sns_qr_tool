@@ -28,6 +28,16 @@ class SubmitScan extends ScannerEvent {
   List<Object> get props => [serialNumber, functionId];
 }
 
+class CallApiOnly extends ScannerEvent {
+  final String serialNumber;
+  final String functionId;
+
+  const CallApiOnly(this.serialNumber, this.functionId);
+
+  @override
+  List<Object> get props => [serialNumber, functionId];
+}
+
 class SendToDeviceOnly extends ScannerEvent {
   final String serialNumber;
   final String functionId;
