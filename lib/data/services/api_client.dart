@@ -228,7 +228,8 @@ class ApiClient {
       final currentHeaders = await headers;
       final targetUrl = _getUrlForEndpoint(endpoint);
       print('DEBUG: API GET request to: $targetUrl$endpoint');
-      print('DEBUG: Headers: $currentHeaders');
+      print('DEBUG: Request Headers: $currentHeaders');
+      print('DEBUG: Authorization Header: ${currentHeaders['Authorization'] ?? 'MISSING'}');
 
       final response = await _client.get(
         Uri.parse('$targetUrl$endpoint'),
@@ -236,6 +237,7 @@ class ApiClient {
       ).timeout(_timeout);
 
       print('DEBUG: API GET response status: ${response.statusCode}');
+      print('DEBUG: API GET response headers: ${response.headers}');
       print('DEBUG: API GET response body: ${response.body}');
 
       if (response.body.isEmpty) {
@@ -303,6 +305,9 @@ class ApiClient {
       final currentHeaders = await headers;
       final targetUrl = _getUrlForEndpoint(endpoint);
       print('DEBUG: API POST request to: $targetUrl$endpoint with body: $body');
+      print('DEBUG: POST Request Headers: $currentHeaders');
+      print('DEBUG: POST Authorization Header: ${currentHeaders['Authorization'] ?? 'MISSING'}');
+
       final response = await _client.post(
         Uri.parse('$targetUrl$endpoint'),
         body: json.encode(body),
@@ -310,6 +315,8 @@ class ApiClient {
       ).timeout(_timeout);
 
       print('DEBUG: API POST response status: ${response.statusCode}');
+      print('DEBUG: API POST response headers: ${response.headers}');
+      print('DEBUG: API POST response body: ${response.body}');
 
       if (response.body.isEmpty) {
         return {
@@ -376,6 +383,9 @@ class ApiClient {
       final currentHeaders = await headers;
       final targetUrl = _getUrlForEndpoint(endpoint);
       print('DEBUG: API PATCH request to: $targetUrl$endpoint with body: $body');
+      print('DEBUG: PATCH Request Headers: $currentHeaders');
+      print('DEBUG: PATCH Authorization Header: ${currentHeaders['Authorization'] ?? 'MISSING'}');
+
       final response = await _client.patch(
         Uri.parse('$targetUrl$endpoint'),
         body: json.encode(body),
@@ -383,6 +393,8 @@ class ApiClient {
       ).timeout(_timeout);
 
       print('DEBUG: API PATCH response status: ${response.statusCode}');
+      print('DEBUG: API PATCH response headers: ${response.headers}');
+      print('DEBUG: API PATCH response body: ${response.body}');
 
       if (response.body.isEmpty) {
         return {
@@ -447,12 +459,17 @@ class ApiClient {
       final currentHeaders = await headers;
       final targetUrl = _getUrlForEndpoint(endpoint);
       print('DEBUG: API DELETE request to: $targetUrl$endpoint');
+      print('DEBUG: DELETE Request Headers: $currentHeaders');
+      print('DEBUG: DELETE Authorization Header: ${currentHeaders['Authorization'] ?? 'MISSING'}');
+
       final response = await _client.delete(
         Uri.parse('$targetUrl$endpoint'),
         headers: currentHeaders,
       ).timeout(_timeout);
 
       print('DEBUG: API DELETE response status: ${response.statusCode}');
+      print('DEBUG: API DELETE response headers: ${response.headers}');
+      print('DEBUG: API DELETE response body: ${response.body}');
 
       if (response.body.isEmpty && response.statusCode != 204) {
         return {
@@ -532,5 +549,24 @@ class ApiClient {
 
   void dispose() {
     _client.close();
+  }
+
+  // Debug method to check token storage and retrieval
+  Future<void> debugTokenInfo() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(_tokenPrefKey);
+      final username = prefs.getString(_userPrefKey);
+
+      print('DEBUG: ========== TOKEN DEBUG INFO ==========');
+      print('DEBUG: Token exists: ${token != null}');
+      print('DEBUG: Token length: ${token?.length ?? 0}');
+      print('DEBUG: Token preview: ${token != null ? '${token.substring(0, token.length > 20 ? 20 : token.length)}...' : 'NULL'}');
+      print('DEBUG: Username: $username');
+      print('DEBUG: Storage keys checked: $_tokenPrefKey, $_userPrefKey');
+      print('DEBUG: =====================================');
+    } catch (e) {
+      print('DEBUG: Error in debugTokenInfo: $e');
+    }
   }
 }
