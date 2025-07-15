@@ -394,6 +394,44 @@ class ExportWarehouseService {
     }
   }
 
+  /// Get orders for a specific shipper
+  Future<Map<String, dynamic>> getOrdersForShipper(String shipperId) async {
+    try {
+      // Use the correct shipper endpoint as specified in your router setup
+      // Changed from '/shipper/$shipperId' to '/api/order/shipper/$shipperId' to match router configuration
+      final response = await _apiClient.get('/api/order/shipper/$shipperId');
+
+      if (response['success'] == true && response['data'] != null) {
+        return {
+          'success': true,
+          'data': response['data'],
+        };
+      } else {
+        // Handle different response structures
+        final statusCode = response['data']?['status_code'];
+        final data = response['data']?['data'];
+
+        if (statusCode == 200 && data != null) {
+          return {
+            'success': true,
+            'data': data,
+          };
+        }
+
+        return {
+          'success': false,
+          'message': response['message'] ?? 'Không thể tải đơn hàng của shipper',
+        };
+      }
+    } catch (e, stackTrace) {
+      logError('Lỗi tải đơn hàng của shipper', e, stackTrace);
+      return {
+        'success': false,
+        'message': 'Lỗi kết nối: ${e.toString()}',
+      };
+    }
+  }
+
   /// Export order item using QR data
   Future<Map<String, dynamic>> exportOrderItemFromQr({
     required String exportId,
@@ -421,7 +459,7 @@ class ExportWarehouseService {
       } else {
         return {
           'success': false,
-          'message': result['message'] ?? 'Không thể xuất thiết bị',
+          'message': result['message'] ?? 'Không th�� xuất thiết bị',
         };
       }
     } catch (e) {

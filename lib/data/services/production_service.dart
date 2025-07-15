@@ -1,4 +1,5 @@
 import 'api_client.dart';
+import '../models/qr_data.dart';
 
 class ProductionService {
   final ApiClient _apiClient;
@@ -28,55 +29,44 @@ class ProductionService {
   }
 
   Future<Map<String, dynamic>> processScannedSerial(
-    String serialNumber,
+    String qrRawData,
     {required String functionId}
   ) async {
-    if (serialNumber.isEmpty) {
+    if (qrRawData.isEmpty) {
       return {
         'success': false,
-        'message': 'Serial number cannot be empty',
-        'errorCode': 'SERIAL_001',
+        'message': 'QR data cannot be empty',
+        'errorCode': 'QR_001',
       };
     }
 
-    // Handle stockin and stockout as features under development
+    // Handle stockin and stockout operations - they should use warehouse services instead
     if (functionId == 'stockin' || functionId == 'stockout') {
       return {
         'success': false,
-        'message': 'Tính năng đang phát triển',
+        'message': 'Tính năng đang phát triển - Sử dụng warehouse services',
         'errorCode': 'FEATURE_001',
         'isFeatureInDevelopment': true,
       };
     }
 
-    // Define stage and status based on the selected function
-    String stage;
-    String status;
-
-    switch (functionId) {
-      case 'identify':
-        stage = 'assembly';
-        status = 'in_progress';
-        break;
-      case 'firmware':
-        stage = 'assembly';
-        status = 'firmware_upload';
-        break;
-      case 'testing':
-        stage = 'qc';
-        status = 'firmware_uploaded';
-        break;
-      case 'packaging':
-        stage = 'completed';
-        status = 'pending_packaging';
-        break;
-      default:
-        // Default fallback
-        stage = 'qc';
-        status = 'pending';
-    }
-
+    // For production modes (identify, firmware, testing, packaging), extract only serial_number
     try {
+      final qrData = QrData.fromJsonString(qrRawData);
+      final serialNumber = qrData.serialNumber;
+
+      if (serialNumber.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Serial number not found in QR data',
+          'errorCode': 'SERIAL_001',
+        };
+      }
+
+      // All production modes use assembly stage with in_progress status
+      final stage = 'assembly';
+      final status = 'in_progress';
+
       print('DEBUG: Processing serial $serialNumber with stage: $stage, status: $status');
       final result = await updateDeviceStage(serialNumber, stage, status);
 
@@ -93,7 +83,7 @@ class ProductionService {
       return {
         'success': false,
         'errorCode': 'API_002',
-        'message': 'Error processing serial number: ${e.toString()}',
+        'message': 'Error processing QR data: ${e.toString()}',
       };
     }
   }
