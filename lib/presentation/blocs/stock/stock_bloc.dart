@@ -38,6 +38,7 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     on<StartExportOrder>(_onStartExportOrder);
     on<LoadExportOrders>(_onLoadExportOrders);
     on<SelectExportOrder>(_onSelectExportOrder);
+    on<LoadExportOrderDetails>(_onLoadExportOrderDetails);
     on<ScanExportDevice>(_onScanExportDevice);
     on<CompleteExportOrder>(_onCompleteExportOrder);
   }
@@ -334,6 +335,12 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     try {
       print('DEBUG: Loading import order details for: ${event.importId}');
 
+      // If the selected order is null or different from the requested one,
+      // find the order first to ensure we have a reference
+      final selectedOrder = currentState.selectedImportOrder?.id == event.importId
+          ? currentState.selectedImportOrder
+          : currentState.importOrders.firstWhere((order) => order.id == event.importId);
+
       // For now, we'll just call the process endpoint since the detail endpoint
       // might not exist or return the expected format
       final processResult = await _importWarehouseService.getImportOrderProcess(event.importId);
@@ -370,6 +377,7 @@ class StockBloc extends Bloc<StockEvent, StockState> {
 
         emit(currentState.copyWith(
           processItems: processItems,
+          selectedImportOrder: selectedOrder,  // Ensure we maintain the selected order
           isLoadingDetails: false,
         ));
       } else {
@@ -468,7 +476,7 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       }
     } catch (e, stackTrace) {
       logError('Lỗi bắt đầu đơn xuất', e, stackTrace);
-      emit(StockError('Không thể bắt đầu đơn xuất: ${e.toString()}'));
+      emit(StockError('Không thể bắt đầu đơn xu��t: ${e.toString()}'));
     }
   }
 
@@ -638,6 +646,75 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     } catch (e, stackTrace) {
       logError('Lỗi hoàn thành đơn hàng', e, stackTrace);
       emit(StockError('Không thể hoàn thành đơn hàng: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onLoadExportOrderDetails(
+    LoadExportOrderDetails event,
+    Emitter<StockState> emit,
+  ) async {
+    if (state is! StockExportLoaded) return;
+
+    final currentState = state as StockExportLoaded;
+
+    try {
+      print('DEBUG: Loading export order details for: ${event.exportId}');
+
+      // If the selected order is null or different from the requested one,
+      // find the order first to ensure we have a reference
+      final selectedOrder = currentState.selectedExportOrder?.id == event.exportId
+          ? currentState.selectedExportOrder
+          : currentState.exportOrders.firstWhere((order) => order.id == event.exportId);
+
+      // Emit a loading state for the detail view but keep the selected order
+      emit(currentState.copyWith(
+        selectedExportOrder: selectedOrder,
+        isLoadingDetails: true,
+      ));
+
+      // Call the API to get export order details
+      final detailResult = await _exportWarehouseService.getExportOrderDetail(event.exportId);
+
+      if (detailResult['success'] == true) {
+        final detailData = detailResult['data'];
+
+        // Also fetch the process/progress information for this export order
+        final processResult = await _exportWarehouseService.getExportProgress(event.exportId);
+
+        // Process items from the API response - this will depend on your data model
+        // For now we'll just store the raw data
+
+        print('DEBUG: Successfully loaded export order details');
+
+        // Update the state with the export order details
+        emit(currentState.copyWith(
+          selectedExportOrder: selectedOrder,
+          exportOrderDetail: detailData,
+          exportProcessItems: processResult['success'] == true ? processResult['data'] : null,
+          isLoadingDetails: false,
+        ));
+      } else {
+        final errorMessage = detailResult['message'] ?? 'Không thể tải chi tiết đơn xuất';
+        print('DEBUG: LoadExportOrderDetails failed: $errorMessage');
+
+        // Keep the selected order but mark loading as complete
+        emit(currentState.copyWith(
+          selectedExportOrder: selectedOrder,
+          isLoadingDetails: false,
+        ));
+
+        // Show error message
+        emit(StockError(errorMessage));
+      }
+    } catch (e, stackTrace) {
+      logError('Lỗi tải chi tiết đơn xuất', e, stackTrace);
+      print('DEBUG: Exception in _onLoadExportOrderDetails: $e');
+
+      // Keep the current state but mark loading as complete
+      emit(currentState.copyWith(isLoadingDetails: false));
+
+      // Show error message
+      emit(StockError('Lỗi tải chi tiết đơn xuất: ${e.toString()}'));
     }
   }
 

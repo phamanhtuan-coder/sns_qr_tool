@@ -88,50 +88,68 @@ class ExportOrder extends Equatable {
 }
 
 class ExportOrderDetail extends Equatable {
-  final String id;
-  final String exportOrderId;
+  final String? batchCode;
+  final int? exportId;
+  final String? orderId;
   final String productId;
   final int quantity;
-  final double price;
-  final double discount;
-  final double total;
+  final String? note;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final DateTime? deletedAt;
 
   const ExportOrderDetail({
-    required this.id,
-    required this.exportOrderId,
+    this.batchCode,
+    this.exportId,
+    this.orderId,
     required this.productId,
     required this.quantity,
-    required this.price,
-    required this.discount,
-    required this.total,
+    this.note,
+    this.createdAt,
+    this.updatedAt,
+    this.deletedAt,
   });
 
   factory ExportOrderDetail.fromJson(Map<String, dynamic> json) {
     return ExportOrderDetail(
-      id: json['id'] as String,
-      exportOrderId: json['export_order_id'] as String,
-      productId: json['product_id'] as String,
-      quantity: json['quantity'] as int,
-      price: (json['price'] as num).toDouble(),
-      discount: (json['discount'] as num).toDouble(),
-      total: (json['total'] as num).toDouble(),
+      batchCode: json['batch_code']?.toString(),
+      exportId: json['export_id'] != null ? int.tryParse(json['export_id'].toString()) : null,
+      orderId: json['order_id']?.toString(),
+      productId: json['product_id'].toString(),
+      quantity: int.tryParse(json['quantity'].toString()) ?? 0,
+      note: json['note']?.toString(),
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : null,
+      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'].toString()) : null,
+      deletedAt: json['deleted_at'] != null ? DateTime.parse(json['deleted_at'].toString()) : null,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'export_order_id': exportOrderId,
+      'batch_code': batchCode,
+      'export_id': exportId,
+      'order_id': orderId,
       'product_id': productId,
       'quantity': quantity,
-      'price': price,
-      'discount': discount,
-      'total': total,
+      'note': note,
+      'created_at': createdAt?.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
+      'deleted_at': deletedAt?.toIso8601String(),
     };
   }
 
   @override
-  List<Object?> get props => [id, exportOrderId, productId, quantity, price, discount, total];
+  List<Object?> get props => [
+        batchCode,
+        exportId,
+        orderId,
+        productId,
+        quantity,
+        note,
+        createdAt,
+        updatedAt,
+        deletedAt,
+      ];
 }
 
 class ExportItem extends Equatable {

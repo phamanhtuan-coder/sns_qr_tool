@@ -376,8 +376,13 @@ class _BluetoothConnectionWidgetState extends State<BluetoothConnectionWidget> {
   }
 
   Widget _buildDeviceList() {
-    return Column(
-      children: _devices.map((device) => _buildDeviceItem(device)).toList(),
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 300),
+      child: SingleChildScrollView(
+        child: Column(
+          children: _devices.map((device) => _buildDeviceItem(device)).toList(),
+        ),
+      ),
     );
   }
 
@@ -405,6 +410,8 @@ class _BluetoothConnectionWidgetState extends State<BluetoothConnectionWidget> {
             fontWeight: FontWeight.w500,
             color: isConnected ? AppColors.success : null,
           ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,6 +422,8 @@ class _BluetoothConnectionWidgetState extends State<BluetoothConnectionWidget> {
                 fontSize: 12,
                 color: Colors.grey[600],
               ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
             if (device.isBonded)
               Text(
@@ -429,14 +438,21 @@ class _BluetoothConnectionWidgetState extends State<BluetoothConnectionWidget> {
         ),
         trailing: isConnected
             ? const Icon(Icons.check_circle, color: AppColors.success)
-            : ElevatedButton(
-                onPressed: () => _connectToDevice(device),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(80, 32),
+            : SizedBox(
+                width: 80,
+                height: 32,
+                child: ElevatedButton(
+                  onPressed: () => _connectToDevice(device),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: const Text(
+                    'Kết nối',
+                    style: TextStyle(fontSize: 12),
+                  ),
                 ),
-                child: const Text('Kết nối'),
               ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
