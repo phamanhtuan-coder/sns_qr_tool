@@ -62,11 +62,7 @@ class _ResultDialogState extends State<ResultDialog> {
     super.initState();
     _isApiLoading = widget.isApiLoading;
     _isBluetoothLoading = widget.isBluetoothLoading;
-
-    // Set loading timeout timer if buttons are in loading state
-    if (_isApiLoading || _isBluetoothLoading) {
-      _startLoadingTimeout();
-    }
+    // Removed loading timeout timer - let API complete naturally
   }
 
   @override
@@ -78,57 +74,13 @@ class _ResultDialogState extends State<ResultDialog> {
         oldWidget.isBluetoothLoading != widget.isBluetoothLoading) {
       _isApiLoading = widget.isApiLoading;
       _isBluetoothLoading = widget.isBluetoothLoading;
-
-      // Reset timeout timer
-      _loadingTimeoutTimer?.cancel();
-      if (_isApiLoading || _isBluetoothLoading) {
-        _startLoadingTimeout();
-      }
-    }
-  }
-
-  void _startLoadingTimeout() {
-    // Cancel existing timer if any
-    _loadingTimeoutTimer?.cancel();
-
-    // Dynamic timeout based on current mode
-    Duration timeoutDuration = _getTimeoutDuration();
-
-    // Create dynamic timeout timer
-    _loadingTimeoutTimer = Timer(timeoutDuration, () {
-      if (mounted) {
-        setState(() {
-          _isApiLoading = false;
-          _isBluetoothLoading = false;
-          print("⚡ DEBUG: Loading timeout occurred - automatically stopping loading state after ${timeoutDuration.inSeconds} seconds");
-        });
-      }
-    });
-  }
-
-  Duration _getTimeoutDuration() {
-    // Dynamic timeout based on current mode and operation type
-    switch (widget.currentMode) {
-      case 'firmware':
-        return const Duration(seconds: 45); // Longer timeout for firmware operations
-      case 'stockin':
-        return const Duration(seconds: 25); // Medium timeout for stock-in operations
-      case 'stockout':
-        return const Duration(seconds: 20); // Medium timeout for stock-out operations
-      case 'identify':
-        return const Duration(seconds: 15); // Shorter timeout for identification
-      case 'testing':
-        return const Duration(seconds: 30); // Medium-long timeout for testing
-      case 'packaging':
-        return const Duration(seconds: 20); // Medium timeout for packaging
-      default:
-        return const Duration(seconds: 15); // Default timeout
+      // Removed timeout timer reset - no more timeouts
     }
   }
 
   @override
   void dispose() {
-    _loadingTimeoutTimer?.cancel();
+    // _loadingTimeoutTimer?.cancel(); // Removed timeout timer
     super.dispose();
   }
 
@@ -209,13 +161,6 @@ class _ResultDialogState extends State<ResultDialog> {
                                 ? 'Đang gửi API...'
                                 : 'Đang kết nối Bluetooth...',
                         style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Timeout sau ${_getTimeoutDuration().inSeconds} giây',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.grey[600],
-                        ),
                       ),
                     ],
                   ),

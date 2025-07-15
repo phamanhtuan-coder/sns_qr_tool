@@ -58,3 +58,25 @@ class UpdateLocation extends DeliveryEvent {
 class ResetDelivery extends DeliveryEvent {
   const ResetDelivery();
 }
+
+class StartShippingOrder extends DeliveryEvent {
+  final String orderId;
+
+  const StartShippingOrder(this.orderId);
+
+  @override
+  List<Object?> get props => [orderId];
+}
+
+class ConfirmShippingOrder extends DeliveryEvent {
+  final String orderId;
+  final String imageProofBase64;
+
+  const ConfirmShippingOrder({
+    required this.orderId,
+    required this.imageProofBase64,
+  });
+
+  @override
+  List<Object?> get props => [orderId, imageProofBase64];
+}

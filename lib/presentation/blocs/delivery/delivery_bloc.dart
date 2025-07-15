@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:smart_net_qr_scanner/data/models/delivery_order.dart';
 import 'package:smart_net_qr_scanner/data/services/delivery_service.dart';
+import 'package:smart_net_qr_scanner/data/services/delivery_service_extension.dart';
 import 'package:smart_net_qr_scanner/utils/logger.dart';
 
 part 'delivery_event.dart';
@@ -18,6 +19,8 @@ class DeliveryBloc extends Bloc<DeliveryEvent, DeliveryState> {
     on<CompleteDeliveryOrder>(_onCompleteDeliveryOrder);
     on<UpdateLocation>(_onUpdateLocation);
     on<ResetDelivery>(_onResetDelivery);
+    on<StartShippingOrder>(_onStartShippingOrder);
+    on<ConfirmShippingOrder>(_onConfirmShippingOrder);
   }
 
   Future<void> _onLoadDeliveryOrders(
@@ -188,5 +191,70 @@ class DeliveryBloc extends Bloc<DeliveryEvent, DeliveryState> {
     Emitter<DeliveryState> emit,
   ) async {
     emit(const DeliveryInitial());
+  }
+
+  Future<void> _onStartShippingOrder(
+    StartShippingOrder event,
+    Emitter<DeliveryState> emit,
+  ) async {
+    if (state is! DeliveryLoaded) return;
+
+    final currentState = state as DeliveryLoaded;
+
+    try {
+      emit(currentState.copyWith(isLoading: true));
+
+      final result = await _deliveryService.startShippingOrder(event.orderId);
+
+      if (result['success'] == true) {
+        // Reload orders to get updated status
+        final orders = await _deliveryService.getAssignedOrders();
+        emit(currentState.copyWith(
+          orders: orders,
+          isLoading: false,
+        ));
+      } else {
+        emit(currentState.copyWith(isLoading: false));
+        emit(DeliveryError(result['message'] ?? 'Không thể bắt đầu giao hàng'));
+      }
+    } catch (e, stackTrace) {
+      logError('Lỗi bắt đầu giao hàng', e, stackTrace);
+      emit(currentState.copyWith(isLoading: false));
+      emit(DeliveryError('Lỗi bắt đầu giao hàng: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onConfirmShippingOrder(
+    ConfirmShippingOrder event,
+    Emitter<DeliveryState> emit,
+  ) async {
+    if (state is! DeliveryLoaded) return;
+
+    final currentState = state as DeliveryLoaded;
+
+    try {
+      emit(currentState.copyWith(isLoading: true));
+
+      final result = await _deliveryService.confirmShippingOrder(
+        orderId: event.orderId,
+        imageProofBase64: event.imageProofBase64,
+      );
+
+      if (result['success'] == true) {
+        // Reload orders to get updated status
+        final orders = await _deliveryService.getAssignedOrders();
+        emit(currentState.copyWith(
+          orders: orders,
+          isLoading: false,
+        ));
+      } else {
+        emit(currentState.copyWith(isLoading: false));
+        emit(DeliveryError(result['message'] ?? 'Không thể xác nhận hoàn thành giao hàng'));
+      }
+    } catch (e, stackTrace) {
+      logError('Lỗi xác nhận hoàn thành giao hàng', e, stackTrace);
+      emit(currentState.copyWith(isLoading: false));
+      emit(DeliveryError('Lỗi xác nhận hoàn thành giao hàng: ${e.toString()}'));
+    }
   }
 }
