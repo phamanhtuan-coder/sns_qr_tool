@@ -4,6 +4,8 @@ import 'package:equatable/equatable.dart';
 import 'package:smart_net_qr_scanner/data/models/device.dart';
 import 'package:smart_net_qr_scanner/data/models/export_order.dart';
 import 'package:smart_net_qr_scanner/data/models/import_order.dart';
+import 'package:smart_net_qr_scanner/data/models/import_order_detail.dart';
+import 'package:smart_net_qr_scanner/data/models/import_order_process.dart';
 import 'package:smart_net_qr_scanner/data/models/stock_order.dart';
 import 'package:smart_net_qr_scanner/data/models/enhanced_export_item.dart'; // Add this import
 
@@ -76,31 +78,59 @@ class StockLoaded extends StockState {
 // New state for import warehouse
 class StockImportLoaded extends StockState {
   final List<ImportOrder> importOrders;
+  final ImportOrderDetail? importOrderDetail; // Add detailed order info
+  final List<ImportOrderProcess> processItems; // Process items that need to be scanned
   final ImportOrder? selectedImportOrder;
+  final bool isLoadingDetails; // Loading state for order details
   final List<ImportOrderItem> scannedImportItems;
 
   const StockImportLoaded({
     required this.importOrders,
+    this.importOrderDetail,
+    this.processItems = const [],
     this.selectedImportOrder,
+    this.isLoadingDetails = false,
     this.scannedImportItems = const [],
   });
 
   StockImportLoaded copyWith({
     List<ImportOrder>? importOrders,
+    ImportOrderDetail? importOrderDetail,
+    List<ImportOrderProcess>? processItems,
     ImportOrder? selectedImportOrder,
+    bool? isLoadingDetails,
     List<ImportOrderItem>? scannedImportItems,
   }) {
     return StockImportLoaded(
       importOrders: importOrders ?? this.importOrders,
+      importOrderDetail: importOrderDetail ?? this.importOrderDetail,
+      processItems: processItems ?? this.processItems,
       selectedImportOrder: selectedImportOrder,
+      isLoadingDetails: isLoadingDetails ?? this.isLoadingDetails,
       scannedImportItems: scannedImportItems ?? this.scannedImportItems,
     );
+  }
+
+  // Helper methods
+  int getTotalDevicesToScan() => processItems.fold(0, (sum, item) => sum + item.totalSerialNeed);
+
+  int getTotalScannedDevices() => processItems.fold(0, (sum, item) => sum + item.totalSerialImported);
+
+  bool isOrderComplete() => processItems.every((item) => item.isCompleted);
+
+  double getProgressPercentage() {
+    final total = getTotalDevicesToScan();
+    if (total == 0) return 0.0;
+    return getTotalScannedDevices() / total;
   }
 
   @override
   List<Object?> get props => [
     importOrders,
+    importOrderDetail,
+    processItems,
     selectedImportOrder,
+    isLoadingDetails,
     scannedImportItems,
   ];
 }

@@ -70,7 +70,7 @@ class ImportWarehouseService {
   Future<Map<String, dynamic>> getImportOrderDetails(String importId) async {
     try {
       print('DEBUG: Getting import order details for: $importId');
-      final result = await _apiClient.get('/import-warehouse/?import_id=$importId');
+      final result = await _apiClient.get('/import-warehouse/detail/$importId');
       print('DEBUG: Import order details response: $result');
 
       if (result['success'] == true && result['data'] != null) {
@@ -86,6 +86,33 @@ class ImportWarehouseService {
       }
     } catch (e) {
       print('DEBUG: Error in getImportOrderDetails: $e');
+      return {
+        'success': false,
+        'message': 'Lỗi kết nối: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Get import order process details (devices to scan)
+  Future<Map<String, dynamic>> getImportOrderProcess(String importId) async {
+    try {
+      print('DEBUG: Getting import order process for: $importId');
+      final result = await _apiClient.get('/import-warehouse/process/$importId');
+      print('DEBUG: Import order process response: $result');
+
+      if (result['success'] == true && result['data'] != null) {
+        return {
+          'success': true,
+          'data': result['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': result['message'] ?? 'Không thể tải quy trình nhập kho',
+        };
+      }
+    } catch (e) {
+      print('DEBUG: Error in getImportOrderProcess: $e');
       return {
         'success': false,
         'message': 'Lỗi kết nối: ${e.toString()}',

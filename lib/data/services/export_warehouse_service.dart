@@ -321,6 +321,43 @@ class ExportWarehouseService {
     }
   }
 
+  /// Get export order details by ID
+  Future<Map<String, dynamic>> getExportOrderDetail(String exportId) async {
+    try {
+      print('DEBUG: Getting export order detail for: $exportId');
+      final response = await _apiClient.get('/export-warehouse/detail/$exportId');
+
+      if (response['success'] == true && response['data'] != null) {
+        return {
+          'success': true,
+          'data': response['data'],
+        };
+      } else {
+        // Handle different response structures
+        final statusCode = response['data']?['status_code'];
+        final data = response['data']?['data'];
+
+        if (statusCode == 200 && data != null) {
+          return {
+            'success': true,
+            'data': data,
+          };
+        }
+
+        return {
+          'success': false,
+          'message': response['message'] ?? 'Không thể tải chi tiết đơn xuất',
+        };
+      }
+    } catch (e, stackTrace) {
+      logError('Lỗi tải chi tiết đơn xuất', e, stackTrace);
+      return {
+        'success': false,
+        'message': 'Lỗi kết nối: ${e.toString()}',
+      };
+    }
+  }
+
   /// Get export progress for tracking
   Future<Map<String, dynamic>> getExportProgress(String exportId) async {
     try {

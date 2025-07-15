@@ -30,7 +30,7 @@ class AuthService {
           final userData = {
             'employeeId': employeeId,
             'username': username,
-            'name': employeeId,
+            'name': username, // Use username instead of employeeId for display
             'role': 'Admin',
             'department': 'IT',
           };
@@ -50,7 +50,7 @@ class AuthService {
           final userData = {
             'employeeId': employeeId,
             'username': username,
-            'name': employeeId,
+            'name': username, // Use username instead of employeeId for display
             'role': 'Admin',
             'department': 'IT',
           };
@@ -80,6 +80,13 @@ class AuthService {
     await prefs.setString(_userKey, jsonEncode(userData));
     await prefs.setString(_usernameKey, username);
     await prefs.setBool(_isLoggedInKey, true);
+
+    // Update ApiClient with the new token
+    final apiClient = GetIt.instance<ApiClient>();
+    await apiClient.setAccessToken(token);
+    await apiClient.setUsername(username);
+
+    print('DEBUG: Token and user data saved successfully');
   }
 
   Future<String?> getToken() async {
@@ -103,7 +110,23 @@ class AuthService {
 
   Future<bool> isLoggedIn() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_isLoggedInKey) ?? false;
+    final isLoggedIn = prefs.getBool(_isLoggedInKey) ?? false;
+
+    // If user is logged in, ensure ApiClient has the token
+    if (isLoggedIn) {
+      final token = await getToken();
+      final username = await getUsername();
+      if (token != null) {
+        final apiClient = GetIt.instance<ApiClient>();
+        await apiClient.setAccessToken(token);
+        if (username != null) {
+          await apiClient.setUsername(username);
+        }
+        print('DEBUG: Token restored to ApiClient on app startup');
+      }
+    }
+
+    return isLoggedIn;
   }
 
   Future<void> logout() async {
@@ -112,6 +135,13 @@ class AuthService {
     await prefs.remove(_userKey);
     await prefs.remove(_usernameKey);
     await prefs.setBool(_isLoggedInKey, false);
+
+    // Clear token from ApiClient as well
+    final apiClient = GetIt.instance<ApiClient>();
+    await apiClient.setAccessToken(null);
+    await apiClient.setUsername(null);
+
+    print('DEBUG: User logged out and tokens cleared');
   }
 
   Future<bool> validateToken() async {

@@ -447,9 +447,9 @@ class _BluetoothConnectionWidgetState extends State<BluetoothConnectionWidget> {
   }
 
   void _enableBluetooth() async {
-    final hasPermissions = await _bluetoothService.requestPermissions();
-    if (!hasPermissions) {
-      _showError('Không có quyền truy cập Bluetooth');
+    final permissionResult = await _bluetoothService.requestPermissions();
+    if (!permissionResult['success']) {
+      _showError(permissionResult['error']?['message'] ?? 'Không có quyền truy cập Bluetooth');
       return;
     }
 
@@ -460,9 +460,9 @@ class _BluetoothConnectionWidgetState extends State<BluetoothConnectionWidget> {
   }
 
   void _startDiscovery() async {
-    final hasPermissions = await _bluetoothService.requestPermissions();
-    if (!hasPermissions) {
-      _showError('Không có quyền tìm kiếm thiết bị Bluetooth');
+    final permissionResult = await _bluetoothService.requestPermissions();
+    if (!permissionResult['success']) {
+      _showError(permissionResult['error']?['message'] ?? 'Không có quyền tìm kiếm thiết bị Bluetooth');
       return;
     }
 

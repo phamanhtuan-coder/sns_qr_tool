@@ -106,6 +106,16 @@ class BluetoothClientService {
 
   Future<void> initialize() async {
     print('DEBUG: Initializing Bluetooth service');
+
+    // Request permissions first before trying to access Bluetooth
+    final permissionResult = await requestPermissions();
+    if (!permissionResult['success']) {
+      print('DEBUG: Bluetooth permissions not granted: ${permissionResult['error']}');
+      _bluetoothStateController.add(AppBluetoothState.unauthorized);
+      return;
+    }
+
+    // Continue with normal initialization only if permissions are granted
     await _checkBluetoothState();
     await _loadBondedDevices();
     _listenToBluetoothState();
@@ -144,14 +154,70 @@ class BluetoothClientService {
     _adapterStateSubscription = fbp.FlutterBluePlus.adapterState.listen(_mapAdapterState);
   }
 
-  Future<bool> requestPermissions() async {
+  Future<Map<String, dynamic>> requestPermissions() async {
     try {
-      final permissions = [Permission.bluetooth, Permission.bluetoothConnect, Permission.bluetoothScan, Permission.location];
-      Map<Permission, PermissionStatus> statuses = await permissions.request();
-      return statuses.values.every((status) => status == PermissionStatus.granted || status == PermissionStatus.limited);
+      // Check each permission individually for better control
+      var bluetoothScan = await Permission.bluetoothScan.status;
+      var bluetoothConnect = await Permission.bluetoothConnect.status;
+      var location = await Permission.locationWhenInUse.status;
+
+      // Request any permissions that aren't granted
+      if (!bluetoothScan.isGranted) {
+        bluetoothScan = await Permission.bluetoothScan.request();
+      }
+
+      if (!bluetoothConnect.isGranted) {
+        bluetoothConnect = await Permission.bluetoothConnect.request();
+      }
+
+      // Location is often required for Bluetooth scanning on Android
+      if (!location.isGranted) {
+        location = await Permission.locationWhenInUse.request();
+      }
+
+      // Check if all permissions are granted
+      if (bluetoothScan.isGranted &&
+          bluetoothConnect.isGranted &&
+          location.isGranted) {
+        print('DEBUG: All Bluetooth permissions granted');
+        return {'success': true};
+      }
+
+      // If any permission is permanently denied
+      if (bluetoothScan.isPermanentlyDenied ||
+          bluetoothConnect.isPermanentlyDenied ||
+          location.isPermanentlyDenied) {
+        print('DEBUG: Some Bluetooth permissions permanently denied');
+        return {
+          'success': false,
+          'error': {
+            'title': 'Quyền Bluetooth bị từ chối',
+            'message': 'Vui lòng cấp quyền Bluetooth và vị trí trong cài đặt thiết bị để sử dụng tính năng này.',
+            'action': 'open_settings'
+          }
+        };
+      }
+
+      // If permissions were denied but not permanently
+      print('DEBUG: Some Bluetooth permissions denied');
+      return {
+        'success': false,
+        'error': {
+          'title': 'Không thể truy cập Bluetooth',
+          'message': 'Quyền Bluetooth hoặc vị trí bị từ chối. Vui lòng cấp quyền để sử dụng tính năng này.',
+          'action': 'retry'
+        }
+      };
     } catch (e) {
       print('DEBUG: Error requesting Bluetooth permissions: $e');
-      return false;
+      return {
+        'success': false,
+        'error': {
+          'title': 'Lỗi xin quyền Bluetooth',
+          'message': 'Đã xảy ra lỗi khi yêu cầu quyền Bluetooth: ${e.toString()}',
+          'action': 'retry'
+        }
+      };
     }
   }
 

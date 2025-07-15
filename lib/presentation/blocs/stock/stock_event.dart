@@ -65,6 +65,15 @@ class SelectImportOrder extends StockEvent {
   List<Object?> get props => [importId];
 }
 
+class LoadImportOrderDetails extends StockEvent {
+  final String importId;
+
+  const LoadImportOrderDetails(this.importId);
+
+  @override
+  List<Object?> get props => [importId];
+}
+
 class ScanImportDevice extends StockEvent {
   final String qrData;
 
@@ -92,6 +101,15 @@ class SelectExportOrder extends StockEvent {
   final String exportId;
 
   const SelectExportOrder(this.exportId);
+
+  @override
+  List<Object?> get props => [exportId];
+}
+
+class LoadExportOrderDetails extends StockEvent {
+  final String exportId;
+
+  const LoadExportOrderDetails(this.exportId);
 
   @override
   List<Object?> get props => [exportId];

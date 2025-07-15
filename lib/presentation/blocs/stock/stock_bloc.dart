@@ -5,6 +5,8 @@ import 'dart:convert'; // Add this import for JSON parsing
 import 'package:smart_net_qr_scanner/data/models/device.dart';
 import 'package:smart_net_qr_scanner/data/models/stock_order.dart';
 import 'package:smart_net_qr_scanner/data/models/import_order.dart';
+import 'package:smart_net_qr_scanner/data/models/import_order_detail.dart';
+import 'package:smart_net_qr_scanner/data/models/import_order_process.dart';
 import 'package:smart_net_qr_scanner/data/models/export_order.dart';
 import 'package:smart_net_qr_scanner/data/services/stock_service.dart';
 import 'package:smart_net_qr_scanner/data/services/import_warehouse_service.dart';
@@ -31,6 +33,7 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     on<StartImportOrder>(_onStartImportOrder);
     on<LoadImportOrders>(_onLoadImportOrders);
     on<SelectImportOrder>(_onSelectImportOrder);
+    on<LoadImportOrderDetails>(_onLoadImportOrderDetails);
     on<ScanImportDevice>(_onScanImportDevice);
     on<StartExportOrder>(_onStartExportOrder);
     on<LoadExportOrders>(_onLoadExportOrders);
@@ -185,8 +188,14 @@ class StockBloc extends Bloc<StockEvent, StockState> {
         print('Device types: ${entry.value.map((e) => e.deviceType).toSet().toList()}');
       }
 
+      // Check if exportNumber is not null before proceeding
+      if (selectedOrder.exportNumber == null) {
+        emit(StockError('Export number is required but not available'));
+        return;
+      }
+
       final result = await _exportWarehouseService.completeExportOrder(
-        exportId: selectedOrder.exportNumber,
+        exportId: selectedOrder.exportNumber!,
         orderId: selectedOrder.id,
         listProduct: listProduct,
       );
@@ -245,26 +254,44 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       emit(const StockLoading());
 
       final result = await _importWarehouseService.getUnfinishedInvoices();
+      print('DEBUG: getUnfinishedInvoices response: $result');
 
       if (result['success'] == true) {
         final data = result['data'];
         final List<ImportOrder> importOrders = [];
 
-        if (data is List) {
+        // Handle the nested response structure: { status_code: 200, data: [...] }
+        if (data != null && data['data'] is List) {
+          final ordersData = data['data'] as List;
+          for (final item in ordersData) {
+            try {
+              importOrders.add(ImportOrder.fromJson(item));
+            } catch (e) {
+              print('DEBUG: Error parsing import order: $e, item: $item');
+            }
+          }
+        } else if (data is List) {
+          // Fallback for direct array response
           for (final item in data) {
-            importOrders.add(ImportOrder.fromJson(item));
+            try {
+              importOrders.add(ImportOrder.fromJson(item));
+            } catch (e) {
+              print('DEBUG: Error parsing import order: $e, item: $item');
+            }
           }
         }
 
+        print('DEBUG: Parsed ${importOrders.length} import orders');
         emit(StockImportLoaded(importOrders: importOrders));
       } else {
-        final errorMessage = result['message'] ?? 'Không thể tải danh sách đơn nhập';
+        final errorMessage = result['message'] ?? 'Không thể tải danh sách đơn nh��p';
         print('DEBUG: LoadImportOrders failed: $errorMessage');
-        emit(const StockInitial());
+        emit(StockError(errorMessage));
       }
     } catch (e, stackTrace) {
       logError('Lỗi tải danh sách đơn nhập', e, stackTrace);
-      emit(const StockInitial());
+      print('DEBUG: Exception in _onLoadImportOrders: $e');
+      emit(StockError('Lỗi tải danh sách đơn nhập: ${e.toString()}'));
     }
   }
 
@@ -280,13 +307,82 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       final selectedOrder = currentState.importOrders
           .firstWhere((order) => order.id == event.importId);
 
+      // First update the state with the selected order
       emit(currentState.copyWith(
         selectedImportOrder: selectedOrder,
         scannedImportItems: [],
+        isLoadingDetails: true,
       ));
+
+      // Then automatically load the order details and devices to scan
+      add(LoadImportOrderDetails(event.importId));
+
     } catch (e, stackTrace) {
       logError('Lỗi chọn đơn nhập', e, stackTrace);
       emit(StockError('Không thể chọn đơn nhập: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onLoadImportOrderDetails(
+    LoadImportOrderDetails event,
+    Emitter<StockState> emit,
+  ) async {
+    if (state is! StockImportLoaded) return;
+
+    final currentState = state as StockImportLoaded;
+
+    try {
+      print('DEBUG: Loading import order details for: ${event.importId}');
+
+      // For now, we'll just call the process endpoint since the detail endpoint
+      // might not exist or return the expected format
+      final processResult = await _importWarehouseService.getImportOrderProcess(event.importId);
+
+      if (processResult['success'] == true) {
+        final processData = processResult['data'];
+
+        // Parse process items from the API response
+        final List<ImportOrderProcess> processItems = [];
+        if (processData != null) {
+          // Handle nested response structure: { status_code: 200, data: [...] }
+          if (processData['data'] is List) {
+            final itemsData = processData['data'] as List;
+            for (final item in itemsData) {
+              try {
+                processItems.add(ImportOrderProcess.fromJson(item));
+              } catch (e) {
+                print('DEBUG: Error parsing process item: $e, item: $item');
+              }
+            }
+          } else if (processData is List) {
+            // Direct array response
+            for (final item in processData) {
+              try {
+                processItems.add(ImportOrderProcess.fromJson(item));
+              } catch (e) {
+                print('DEBUG: Error parsing process item: $e, item: $item');
+              }
+            }
+          }
+        }
+
+        print('DEBUG: Loaded ${processItems.length} process items to scan');
+
+        emit(currentState.copyWith(
+          processItems: processItems,
+          isLoadingDetails: false,
+        ));
+      } else {
+        final errorMessage = processResult['message'] ?? 'Không thể tải quy trình nhập kho';
+        print('DEBUG: LoadImportOrderDetails failed: $errorMessage');
+        emit(currentState.copyWith(isLoadingDetails: false));
+        emit(StockError(errorMessage));
+      }
+    } catch (e, stackTrace) {
+      logError('Lỗi tải chi tiết đơn nhập', e, stackTrace);
+      print('DEBUG: Exception in _onLoadImportOrderDetails: $e');
+      emit(currentState.copyWith(isLoadingDetails: false));
+      emit(StockError('Lỗi tải chi tiết đơn nhập: ${e.toString()}'));
     }
   }
 
@@ -389,12 +485,28 @@ class StockBloc extends Bloc<StockEvent, StockState> {
         final data = result['data'];
         final List<ExportOrder> exportOrders = [];
 
-        if (data is List) {
+        // Handle nested response structure: { status_code: 200, data: [...] }
+        if (data != null && data['data'] is List) {
+          final ordersData = data['data'] as List;
+          for (final item in ordersData) {
+            try {
+              exportOrders.add(ExportOrder.fromJson(item));
+            } catch (e) {
+              print('DEBUG: Error parsing export order: $e, item: $item');
+            }
+          }
+        } else if (data is List) {
+          // Fallback for direct array response
           for (final item in data) {
-            exportOrders.add(ExportOrder.fromJson(item));
+            try {
+              exportOrders.add(ExportOrder.fromJson(item));
+            } catch (e) {
+              print('DEBUG: Error parsing export order: $e, item: $item');
+            }
           }
         }
 
+        print('DEBUG: Parsed ${exportOrders.length} export orders');
         emit(StockExportLoaded(exportOrders: exportOrders));
       } else {
         final errorMessage = result['message'] ?? 'Không thể tải danh sách đơn xuất';
