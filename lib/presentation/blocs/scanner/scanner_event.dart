@@ -28,6 +28,15 @@ class SubmitScan extends ScannerEvent {
   List<Object> get props => [serialNumber, functionId];
 }
 
+class SetOrderId extends ScannerEvent {
+  final String orderId;
+
+  const SetOrderId(this.orderId);
+
+  @override
+  List<Object> get props => [orderId];
+}
+
 class CallApiOnly extends ScannerEvent {
   final String serialNumber;
   final String functionId;

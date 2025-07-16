@@ -52,6 +52,17 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
     super.initState();
     _scannerBloc = getIt<ScannerBloc>();
     _cameraService = getIt<CameraService>();
+
+    // Get arguments from route after the widget is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final orderId = args?['order_id'] as String?;
+
+      if (orderId != null) {
+        _scannerBloc.add(SetOrderId(orderId));
+      }
+    });
+
     _setupAnimations();
     _setupCameraErrorListener();
     _checkDeviceSupport();
@@ -497,7 +508,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
                 if (state is ScannerSuccess) {
                   final Map<String, dynamic> details = Map<String, dynamic>.from(state.result['details']);
                   final actions = state.result['actions'] as List<dynamic>? ?? [];
-                  final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
+                  final serial = widget.purpose == 'stockin' || widget.purpose == 'stockout'
+                      ? details['serial_number']?.toString() ?? ''
+                      : details['device_serial']?.toString() ?? '';
 
                   print("DEBUG: Showing success dialog with actions: $actions");
                   print("DEBUG: Success details: $details");

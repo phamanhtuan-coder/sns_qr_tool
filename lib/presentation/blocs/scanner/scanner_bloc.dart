@@ -3,7 +3,10 @@ import 'package:equatable/equatable.dart';
 import 'package:smart_net_qr_scanner/data/services/scanner_service.dart';
 import 'package:smart_net_qr_scanner/data/services/production_service.dart';
 import 'package:smart_net_qr_scanner/data/services/camera_service.dart';
+import 'package:smart_net_qr_scanner/data/services/import_warehouse_service.dart';
+import 'package:smart_net_qr_scanner/data/services/export_warehouse_service.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_bloc.dart';
+import 'package:smart_net_qr_scanner/data/models/qr_data.dart';
 import 'package:smart_net_qr_scanner/utils/logger.dart';
 import 'package:smart_net_qr_scanner/utils/di.dart';
 part 'scanner_event.dart';
@@ -13,52 +16,18 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
   final ScannerService _scannerService = getIt<ScannerService>();
   final ProductionService _productionService = getIt<ProductionService>();
   final CameraService _cameraService = getIt<CameraService>();
+  final ImportWarehouseService _importWarehouseService = getIt<ImportWarehouseService>();
+  final ExportWarehouseService _exportWarehouseService = getIt<ExportWarehouseService>();
   String _currentFunctionId = '';
+  String? _currentOrderId; // Store current import/export order ID
 
   ScannerBloc() : super(const ScannerInitial()) {
     on<ScanQR>((event, emit) async {
       try {
-        // Store the current function ID for later use
         _currentFunctionId = event.purpose;
 
         if (event.error != null) {
           emit(ScannerFailure(error: event.error!));
-          return;
-        }
-
-        // Handle stockin
-        if (event.purpose == 'stockin') {
-          final stockBloc = getIt<StockBloc>();
-          stockBloc.add(ProcessImportItem(
-            importId: '', // Will be extracted from context or state
-            serialNumber: event.data,
-            batchProductionId: '', // Will be extracted from QR if available
-            templateId: '', // Will be extracted from QR if available
-          ));
-          emit(ScannerSuccess(result: {
-            'title': 'Quét thành công',
-            'message': 'Đã quét thiết bị cho nhập kho',
-            'details': {'device_serial': event.data},
-            'actions': const ['retry', 'dashboard'],
-          }));
-          return;
-        }
-
-        // Handle stockout
-        if (event.purpose == 'stockout') {
-          final stockBloc = getIt<StockBloc>();
-          stockBloc.add(ProcessExportItem(
-            exportId: '', // Will be extracted from context or state
-            serialNumber: event.data,
-            batchProductionId: '', // Will be extracted from QR if available
-            templateId: '', // Will be extracted from QR if available
-          ));
-          emit(ScannerSuccess(result: {
-            'title': 'Quét thành công',
-            'message': 'Đã quét thiết bị cho xuất kho',
-            'details': {'device_serial': event.data},
-            'actions': const ['retry', 'dashboard'],
-          }));
           return;
         }
 
@@ -72,12 +41,57 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           return;
         }
 
-        // Handle all production purposes (identify, firmware, testing, packaging) the same way
+        // Parse QR data for all purposes
+        final qrData = QrData.fromJsonString(event.data);
+        print('DEBUG: Parsed QR data: $qrData');
+
+        // Handle stockin
+        if (event.purpose == 'stockin') {
+          emit(ScannerSuccess(result: {
+            'title': 'Quét thành công',
+            'message': 'Đã quét mã QR cho nhập kho',
+            'details': {
+              'serial_number': qrData.serialNumber,
+              'batch_production_id': qrData.batchProductionId,
+              'template_id': qrData.templateId,
+              if (qrData.templateName != null && qrData.templateName!.isNotEmpty)
+                'template_name': qrData.templateName!,
+            },
+            'actions': const ['retry', 'submit', 'dashboard'],
+          }));
+          return;
+        }
+
+        // Handle stockout
+        if (event.purpose == 'stockout') {
+          emit(ScannerSuccess(result: {
+            'title': 'Quét thành công',
+            'message': 'Đã quét mã QR cho xuất kho',
+            'details': {
+              'serial_number': qrData.serialNumber,
+              'batch_production_id': qrData.batchProductionId,
+              'template_id': qrData.templateId,
+              if (qrData.templateName != null && qrData.templateName!.isNotEmpty)
+                'template_name': qrData.templateName!,
+            },
+            'actions': const ['retry', 'submit', 'dashboard'],
+          }));
+          return;
+        }
+
+        // Handle production purposes (identify, firmware, testing, packaging)
         emit(ScannerSuccess(result: {
           'title': 'Quét thành công',
           'message': 'Đã quét thiết bị thành công',
-          'details': {'device_serial': event.data},
-          'actions': const ['retry', 'submit'], // All production modes use submit
+          'details': {
+            'device_serial': event.data,
+            'serial_number': qrData.serialNumber,
+            'batch_production_id': qrData.batchProductionId,
+            'template_id': qrData.templateId,
+            if (qrData.templateName != null && qrData.templateName!.isNotEmpty)
+              'template_name': qrData.templateName!,
+          },
+          'actions': const ['retry', 'submit'],
         }));
       } catch (e, stackTrace) {
         print("DEBUG: Exception in ScanQR handler: $e");
@@ -120,6 +134,10 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
       }
     });
 
+    on<SetOrderId>((event, emit) {
+      _currentOrderId = event.orderId;
+    });
+
     on<RetryScan>((event, emit) async {
       try {
         await _cameraService.reset();
@@ -143,44 +161,130 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
     final currentState = state as ScannerSuccess;
 
     try {
-      // Handle stock operations for stockin and stockout
-      if (functionId == 'stockin' || functionId == 'stockout') {
-        // Handle stock operations - already handled in ScanQR event
-        emit(ScannerSuccess(result: {
-          'title': 'Quét thành công',
-          'message': 'Đã quét thiết bị cho ${functionId == 'stockin' ? 'nhập kho' : 'xuất kho'}',
-          'details': {
-            'device_serial': serialNumber,
-            'operation': functionId == 'stockin' ? 'Nhập kho' : 'Xuất kho',
-            'status': 'Thành công',
-          },
-          'actions': const ['retry', 'dashboard'],
-        }));
+      // Parse QR data from the current state details
+      final qrData = QrData(
+        serialNumber: currentState.result['details']['serial_number'] ?? serialNumber,
+        batchProductionId: currentState.result['details']['batch_production_id'] ?? '',
+        templateId: currentState.result['details']['template_id'] ?? '',
+        templateName: currentState.result['details']['template_name'],
+      );
+
+      // Handle stockin
+      if (functionId == 'stockin') {
+        if (_currentOrderId == null) {
+          emit(ScannerFailure(error: {
+            'title': 'Lỗi dữ liệu',
+            'message': 'Không tìm thấy thông tin đơn nhập.',
+            'details': {'errorCode': 'DATA-002', 'actions': const ['dashboard']},
+          }));
+          return;
+        }
+
+        emit(currentState.copyWith(isApiLoading: true));
+
+        final result = await _importWarehouseService.importOrderItemFromQr(
+          importId: _currentOrderId!,
+          qrData: qrData,
+        );
+
+        if (result['success'] == true) {
+          // Trigger refresh of import progress in StockBloc
+          final stockBloc = getIt<StockBloc>();
+          stockBloc.add(LoadImportProgress(_currentOrderId!));
+
+          emit(ScannerSuccess(
+            result: {
+              'title': 'Nhập kho thành công',
+              'message': 'Đã nhập thiết bị vào kho thành công',
+              'details': {
+                'serial_number': qrData.serialNumber,
+                'batch_production_id': qrData.batchProductionId,
+                'template_id': qrData.templateId,
+                if (qrData.templateName != null) 'template_name': qrData.templateName!,
+                'status': 'Đã nhập kho',
+              },
+              'actions': const ['retry', 'dashboard'],
+            },
+            isApiLoading: false,
+          ));
+        } else {
+          emit(currentState.copyWith(
+            isApiLoading: false,
+            apiError: result['message'] ?? 'Không thể nhập thiết bị vào kho',
+          ));
+        }
         return;
       }
 
-      // Set loading state for API call
+      // Handle stockout
+      if (functionId == 'stockout') {
+        if (_currentOrderId == null) {
+          emit(ScannerFailure(error: {
+            'title': 'Lỗi dữ liệu',
+            'message': 'Không tìm thấy thông tin đơn xuất.',
+            'details': {'errorCode': 'DATA-003', 'actions': const ['dashboard']},
+          }));
+          return;
+        }
+
+        emit(currentState.copyWith(isApiLoading: true));
+
+        // TODO: Implement export item processing when export service is ready
+        final result = await _exportWarehouseService.processExportItem(
+          exportId: _currentOrderId!,
+          serialNumber: qrData.serialNumber,
+          batchProductionId: qrData.batchProductionId,
+          templateId: qrData.templateId,
+        );
+
+        if (result['success'] == true) {
+          // Trigger refresh of export progress in StockBloc
+          final stockBloc = getIt<StockBloc>();
+          stockBloc.add(LoadExportProgress(_currentOrderId!));
+
+          emit(ScannerSuccess(
+            result: {
+              'title': 'Xuất kho thành công',
+              'message': 'Đã xuất thiết bị khỏi kho thành công',
+              'details': {
+                'serial_number': qrData.serialNumber,
+                'batch_production_id': qrData.batchProductionId,
+                'template_id': qrData.templateId,
+                if (qrData.templateName != null) 'template_name': qrData.templateName!,
+                'status': 'Đã xuất kho',
+              },
+              'actions': const ['retry', 'dashboard'],
+            },
+            isApiLoading: false,
+          ));
+        } else {
+          emit(currentState.copyWith(
+            isApiLoading: false,
+            apiError: result['message'] ?? 'Không thể xuất thiết bị khỏi kho',
+          ));
+        }
+        return;
+      }
+
+      // Handle production purposes (existing logic)
       emit(currentState.copyWith(isApiLoading: true));
 
-      // Call API to update serial - no timeout, let it complete naturally
       final apiResult = await _productionService.processScannedSerial(
         serialNumber,
         functionId: functionId,
       );
 
-      // Handle API result
       if (apiResult['success']) {
-        // Complete success
         emit(ScannerSuccess(
           result: {
             'title': 'Thành công',
             'message': 'Đã cập nhật thông tin thiết bị thành công',
             'details': {
               'device_serial': serialNumber,
-              'serial_number': apiResult['data']?['serial_number'] ?? serialNumber,
-              'batch_production_id': apiResult['data']?['batch_production_id'] ?? '',
-              'template_id': apiResult['data']?['template_id'] ?? '',
-              'template_name': apiResult['data']?['template_name'] ?? '',
+              'serial_number': apiResult['data']?['serial_number'] ?? qrData.serialNumber,
+              'batch_production_id': apiResult['data']?['batch_production_id'] ?? qrData.batchProductionId,
+              'template_id': apiResult['data']?['template_id'] ?? qrData.templateId,
+              'template_name': apiResult['data']?['template_name'] ?? qrData.templateName ?? '',
               'stage': apiResult['data']?['stage'] ?? 'assembly',
               'status': apiResult['data']?['status'] ?? 'in_progress',
               'api_status': 'Thành công',
@@ -190,10 +294,9 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           isApiLoading: false,
         ));
       } else {
-        // API failure
         emit(currentState.copyWith(
           isApiLoading: false,
-          apiError: apiResult['message'] ?? 'Không thể cập nh��t thông tin thiết bị',
+          apiError: apiResult['message'] ?? 'Không thể cập nhật thông tin thiết bị',
         ));
       }
     } catch (e) {

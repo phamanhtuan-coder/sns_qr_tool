@@ -27,15 +27,22 @@ class _StockInScreenState extends State<StockInScreen> {
   }
 
   void _handleScanQR() {
+    String? currentOrderId;
+    final currentState = context.read<StockBloc>().state;
+
+    if (currentState is StockImportInProgress) {
+      currentOrderId = currentState.orderId;
+    }
+
     Navigator.of(context).pushNamed(
       AppRouter.scanner,
       arguments: {
         'purpose': 'stockin',
         'context': context,
+        'order_id': currentOrderId,
       },
     );
   }
-
   void _handleScanImportId() {
     Navigator.of(context).pushNamed(
       AppRouter.scanner,
