@@ -13,6 +13,8 @@ class ImportOrder extends Equatable {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
+  final String? supplierName;
+  final int? totalQuantity; // Add total quantity field
 
   const ImportOrder({
     required this.id,
@@ -27,6 +29,8 @@ class ImportOrder extends Equatable {
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
+    this.supplierName,
+    this.totalQuantity,
   });
 
   factory ImportOrder.fromJson(Map<String, dynamic> json) {
@@ -43,25 +47,27 @@ class ImportOrder extends Equatable {
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
       deletedAt: json['deleted_at'] != null ? DateTime.parse(json['deleted_at'] as String) : null,
+      supplierName: json['supplier_name'] as String?,
+      totalQuantity: json['total_quantity'] as int?,
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'import_number': importNumber,
-      'employee_id': employeeId,
-      'warehouse_id': warehouseId,
-      'import_date': importDate.toIso8601String(),
-      'file_authenticate': fileAuthenticate,
-      'total_money': totalMoney,
-      'note': note,
-      'status': status,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
-      'deleted_at': deletedAt?.toIso8601String(),
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'import_number': importNumber,
+    'employee_id': employeeId,
+    'warehouse_id': warehouseId,
+    'import_date': importDate.toIso8601String(),
+    'file_authenticate': fileAuthenticate,
+    'total_money': totalMoney,
+    'note': note,
+    'status': status,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+    'deleted_at': deletedAt?.toIso8601String(),
+    'supplier_name': supplierName,
+    'total_quantity': totalQuantity,
+  };
 
   @override
   List<Object?> get props => [
@@ -77,6 +83,8 @@ class ImportOrder extends Equatable {
     createdAt,
     updatedAt,
     deletedAt,
+    supplierName,
+    totalQuantity,
   ];
 }
 

@@ -26,9 +26,39 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           return;
         }
 
-        final permissionResult = await _scannerService.requestCameraPermission();
-        if (!permissionResult['success']) {
-          emit(ScannerFailure(error: permissionResult['error']));
+        // Handle stockin
+        if (event.purpose == 'stockin') {
+          final stockBloc = getIt<StockBloc>();
+          stockBloc.add(ProcessImportItem(
+            importId: '', // Will be extracted from context or state
+            serialNumber: event.data,
+            batchProductionId: '', // Will be extracted from QR if available
+            templateId: '', // Will be extracted from QR if available
+          ));
+          emit(ScannerSuccess(result: {
+            'title': 'Quét thành công',
+            'message': 'Đã quét thiết bị cho nhập kho',
+            'details': {'device_serial': event.data},
+            'actions': const ['retry', 'dashboard'],
+          }));
+          return;
+        }
+
+        // Handle stockout
+        if (event.purpose == 'stockout') {
+          final stockBloc = getIt<StockBloc>();
+          stockBloc.add(ProcessExportItem(
+            exportId: '', // Will be extracted from context or state
+            serialNumber: event.data,
+            batchProductionId: '', // Will be extracted from QR if available
+            templateId: '', // Will be extracted from QR if available
+          ));
+          emit(ScannerSuccess(result: {
+            'title': 'Quét thành công',
+            'message': 'Đã quét thiết bị cho xuất kho',
+            'details': {'device_serial': event.data},
+            'actions': const ['retry', 'dashboard'],
+          }));
           return;
         }
 
@@ -42,33 +72,10 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           return;
         }
 
-        // Handle stockin and stockout with new workflow
-        if (event.purpose == 'stockin' || event.purpose == 'stockout') {
-          // For stock operations, trigger the stock bloc
-          final stockBloc = getIt<StockBloc>();
-          if (event.purpose == 'stockin') {
-            stockBloc.add(ScanImportDevice(event.data));
-          } else {
-            stockBloc.add(ScanDevice(event.data));
-          }
-
-          emit(ScannerSuccess(result: {
-            'title': 'Quét thành công',
-            'message': 'Đã quét thiết bị cho ${event.purpose == 'stockin' ? 'nhập kho' : 'xuất kho'}',
-            'details': {
-              'device_serial': event.data,
-              'operation': event.purpose == 'stockin' ? 'Nhập kho' : 'Xuất kho',
-              'status': 'Thành công',
-            },
-            'actions': const ['retry', 'dashboard'],
-          }));
-          return;
-        }
-
         // Handle all production purposes (identify, firmware, testing, packaging) the same way
         emit(ScannerSuccess(result: {
           'title': 'Quét thành công',
-          'message': '��ã quét thiết bị thành công',
+          'message': 'Đã quét thiết bị thành công',
           'details': {'device_serial': event.data},
           'actions': const ['retry', 'submit'], // All production modes use submit
         }));
@@ -170,6 +177,10 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
             'message': 'Đã cập nhật thông tin thiết bị thành công',
             'details': {
               'device_serial': serialNumber,
+              'serial_number': apiResult['data']?['serial_number'] ?? serialNumber,
+              'batch_production_id': apiResult['data']?['batch_production_id'] ?? '',
+              'template_id': apiResult['data']?['template_id'] ?? '',
+              'template_name': apiResult['data']?['template_name'] ?? '',
               'stage': apiResult['data']?['stage'] ?? 'assembly',
               'status': apiResult['data']?['status'] ?? 'in_progress',
               'api_status': 'Thành công',
@@ -182,7 +193,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
         // API failure
         emit(currentState.copyWith(
           isApiLoading: false,
-          apiError: apiResult['message'] ?? 'Không thể cập nhật thông tin thiết bị',
+          apiError: apiResult['message'] ?? 'Không thể cập nh��t thông tin thiết bị',
         ));
       }
     } catch (e) {

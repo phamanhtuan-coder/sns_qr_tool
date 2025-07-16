@@ -1,5 +1,3 @@
-// Update the StockExportLoaded state in stock_state.dart
-
 import 'package:equatable/equatable.dart';
 import 'package:smart_net_qr_scanner/data/models/device.dart';
 import 'package:smart_net_qr_scanner/data/models/export_order.dart';
@@ -7,7 +5,7 @@ import 'package:smart_net_qr_scanner/data/models/import_order.dart';
 import 'package:smart_net_qr_scanner/data/models/import_order_detail.dart';
 import 'package:smart_net_qr_scanner/data/models/import_order_process.dart';
 import 'package:smart_net_qr_scanner/data/models/stock_order.dart';
-import 'package:smart_net_qr_scanner/data/models/enhanced_export_item.dart'; // Add this import
+import 'package:smart_net_qr_scanner/data/models/enhanced_export_item.dart';
 
 abstract class StockState extends Equatable {
   const StockState();
@@ -24,6 +22,162 @@ class StockLoading extends StockState {
   const StockLoading();
 }
 
+class StockError extends StockState {
+  final String message;
+
+  const StockError(this.message);
+
+  @override
+  List<Object?> get props => [message];
+}
+
+// Import States
+class StockImportLoaded extends StockState {
+  final List<ImportOrder> importOrders;
+
+  const StockImportLoaded({
+    required this.importOrders,
+  });
+
+  @override
+  List<Object?> get props => [importOrders];
+}
+
+class StockImportOrderNotStarted extends StockState {
+  final String importId;
+  final Map<String, dynamic> orderDetails;
+
+  const StockImportOrderNotStarted({
+    required this.importId,
+    required this.orderDetails,
+  });
+
+  @override
+  List<Object?> get props => [importId, orderDetails];
+}
+
+class StockImportInProgress extends StockState {
+  final List<ImportOrderProcess> items;
+  final String orderId;
+
+  const StockImportInProgress({
+    required this.items,
+    required this.orderId,
+  });
+
+  bool get isComplete => items.every((item) => item.isCompleted);
+  int get totalScanned => items.fold(0, (sum, item) => sum + item.totalSerialImported);
+  int get totalNeeded => items.fold(0, (sum, item) => sum + item.totalSerialNeed);
+  double get progress => totalNeeded > 0 ? totalScanned / totalNeeded : 0.0;
+
+  // Get detailed device information for display
+  String getDeviceListDisplay() {
+    if (items.isEmpty) return 'Không có thiết bị cần nhập';
+
+    return items.map((item) {
+      final progress = '${item.totalSerialImported}/${item.totalSerialNeed}';
+      final status = item.isCompleted ? '✓' : '○';
+      return '$status ${item.productName} ($progress)';
+    }).join('\n');
+  }
+
+  List<String> getIncompleteDevices() {
+    return items
+        .where((item) => !item.isCompleted)
+        .map((item) => item.productName)
+        .toList();
+  }
+
+  @override
+  List<Object> get props => [items, orderId];
+}
+
+// Export States
+class StockExportLoaded extends StockState {
+  final List<ExportOrder> exportOrders;
+  final ExportOrder? selectedExportOrder;
+  final List<EnhancedExportItem> scannedExportItems;
+  final Map<String, int> scannedItemsCounts;
+  final Map<String, List<EnhancedExportItem>> groupedScannedItems;
+  final bool isLoadingDetails;
+  final dynamic exportOrderDetail;
+  final dynamic exportProcessItems;
+
+  const StockExportLoaded({
+    required this.exportOrders,
+    this.selectedExportOrder,
+    this.scannedExportItems = const [],
+    this.scannedItemsCounts = const {},
+    this.groupedScannedItems = const {},
+    this.isLoadingDetails = false,
+    this.exportOrderDetail,
+    this.exportProcessItems,
+  });
+
+  @override
+  List<Object?> get props => [
+    exportOrders,
+    selectedExportOrder,
+    scannedExportItems,
+    scannedItemsCounts,
+    groupedScannedItems,
+    isLoadingDetails,
+    exportOrderDetail,
+    exportProcessItems,
+  ];
+}
+
+class StockExportOrderStarted extends StockState {
+  final String exportId;
+  final Map<String, dynamic> orderDetails;
+
+  const StockExportOrderStarted({
+    required this.exportId,
+    required this.orderDetails,
+  });
+
+  @override
+  List<Object?> get props => [exportId, orderDetails];
+}
+
+// Common States
+class StockProgressLoaded extends StockState {
+  final String orderId;
+  final Map<String, dynamic> progressData;
+  final int scannedCount;
+  final int totalCount;
+  final bool canComplete;
+
+  const StockProgressLoaded({
+    required this.orderId,
+    required this.progressData,
+    required this.scannedCount,
+    required this.totalCount,
+    required this.canComplete,
+  });
+
+  @override
+  List<Object?> get props => [orderId, progressData, scannedCount, totalCount, canComplete];
+}
+
+class StockItemProcessed extends StockState {
+  final String orderId;
+  final String serialNumber;
+  final Map<String, dynamic> itemData;
+  final Map<String, dynamic> progress;
+
+  const StockItemProcessed({
+    required this.orderId,
+    required this.serialNumber,
+    required this.itemData,
+    required this.progress,
+  });
+
+  @override
+  List<Object?> get props => [orderId, serialNumber, itemData, progress];
+}
+
+// Legacy States (kept for compatibility)
 class StockLoaded extends StockState {
   final List<StockOrder> orders;
   final StockOrder? selectedOrder;
@@ -43,26 +197,6 @@ class StockLoaded extends StockState {
     this.isLoading = false,
   });
 
-  StockLoaded copyWith({
-    List<StockOrder>? orders,
-    StockOrder? selectedOrder,
-    Map<String, bool>? scannedItems,
-    Map<String, int>? scannedCounts,
-    List<Device>? scannedDevices,
-    bool? isOrderComplete,
-    bool? isLoading,
-  }) {
-    return StockLoaded(
-      orders: orders ?? this.orders,
-      selectedOrder: selectedOrder,
-      scannedItems: scannedItems ?? this.scannedItems,
-      scannedCounts: scannedCounts ?? this.scannedCounts,
-      scannedDevices: scannedDevices ?? this.scannedDevices,
-      isOrderComplete: isOrderComplete ?? this.isOrderComplete,
-      isLoading: isLoading ?? this.isLoading,
-    );
-  }
-
   @override
   List<Object?> get props => [
     orders,
@@ -73,130 +207,4 @@ class StockLoaded extends StockState {
     isOrderComplete,
     isLoading,
   ];
-}
-
-// New state for import warehouse
-class StockImportLoaded extends StockState {
-  final List<ImportOrder> importOrders;
-  final ImportOrderDetail? importOrderDetail; // Add detailed order info
-  final List<ImportOrderProcess> processItems; // Process items that need to be scanned
-  final ImportOrder? selectedImportOrder;
-  final bool isLoadingDetails; // Loading state for order details
-  final List<ImportOrderItem> scannedImportItems;
-
-  const StockImportLoaded({
-    required this.importOrders,
-    this.importOrderDetail,
-    this.processItems = const [],
-    this.selectedImportOrder,
-    this.isLoadingDetails = false,
-    this.scannedImportItems = const [],
-  });
-
-  StockImportLoaded copyWith({
-    List<ImportOrder>? importOrders,
-    ImportOrderDetail? importOrderDetail,
-    List<ImportOrderProcess>? processItems,
-    ImportOrder? selectedImportOrder,
-    bool? isLoadingDetails,
-    List<ImportOrderItem>? scannedImportItems,
-  }) {
-    return StockImportLoaded(
-      importOrders: importOrders ?? this.importOrders,
-      importOrderDetail: importOrderDetail ?? this.importOrderDetail,
-      processItems: processItems ?? this.processItems,
-      selectedImportOrder: selectedImportOrder,
-      isLoadingDetails: isLoadingDetails ?? this.isLoadingDetails,
-      scannedImportItems: scannedImportItems ?? this.scannedImportItems,
-    );
-  }
-
-  // Helper methods
-  int getTotalDevicesToScan() => processItems.fold(0, (sum, item) => sum + item.totalSerialNeed);
-
-  int getTotalScannedDevices() => processItems.fold(0, (sum, item) => sum + item.totalSerialImported);
-
-  bool isOrderComplete() => processItems.every((item) => item.isCompleted);
-
-  double getProgressPercentage() {
-    final total = getTotalDevicesToScan();
-    if (total == 0) return 0.0;
-    return getTotalScannedDevices() / total;
-  }
-
-  @override
-  List<Object?> get props => [
-    importOrders,
-    importOrderDetail,
-    processItems,
-    selectedImportOrder,
-    isLoadingDetails,
-    scannedImportItems,
-  ];
-}
-
-// Enhanced state for export warehouse with detailed item tracking
-class StockExportLoaded extends StockState {
-  final List<ExportOrder> exportOrders;
-  final ExportOrder? selectedExportOrder;
-  final List<EnhancedExportItem> scannedExportItems; // Changed to EnhancedExportItem
-  final Map<String, int> scannedItemsCounts; // Track counts by template_id
-  final Map<String, List<EnhancedExportItem>> groupedScannedItems; // Group by device type
-  final bool isLoadingDetails; // Loading state for details
-  final dynamic exportOrderDetail; // Export order detail data
-  final dynamic exportProcessItems; // Export process/progress data
-
-  const StockExportLoaded({
-    required this.exportOrders,
-    this.selectedExportOrder,
-    this.scannedExportItems = const [],
-    this.scannedItemsCounts = const {},
-    this.groupedScannedItems = const {},
-    this.isLoadingDetails = false,
-    this.exportOrderDetail,
-    this.exportProcessItems,
-  });
-
-  StockExportLoaded copyWith({
-    List<ExportOrder>? exportOrders,
-    ExportOrder? selectedExportOrder,
-    List<EnhancedExportItem>? scannedExportItems,
-    Map<String, int>? scannedItemsCounts,
-    Map<String, List<EnhancedExportItem>>? groupedScannedItems,
-    bool? isLoadingDetails,
-    dynamic exportOrderDetail,
-    dynamic exportProcessItems,
-  }) {
-    return StockExportLoaded(
-      exportOrders: exportOrders ?? this.exportOrders,
-      selectedExportOrder: selectedExportOrder,
-      scannedExportItems: scannedExportItems ?? this.scannedExportItems,
-      scannedItemsCounts: scannedItemsCounts ?? this.scannedItemsCounts,
-      groupedScannedItems: groupedScannedItems ?? this.groupedScannedItems,
-      isLoadingDetails: isLoadingDetails ?? this.isLoadingDetails,
-      exportOrderDetail: exportOrderDetail ?? this.exportOrderDetail,
-      exportProcessItems: exportProcessItems ?? this.exportProcessItems,
-    );
-  }
-
-  @override
-  List<Object?> get props => [
-    exportOrders,
-    selectedExportOrder,
-    scannedExportItems,
-    scannedItemsCounts,
-    groupedScannedItems,
-    isLoadingDetails,
-    exportOrderDetail,
-    exportProcessItems,
-  ];
-}
-
-class StockError extends StockState {
-  final String message;
-
-  const StockError(this.message);
-
-  @override
-  List<Object?> get props => [message];
 }

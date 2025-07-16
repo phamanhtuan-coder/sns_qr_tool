@@ -52,7 +52,6 @@ class ResultDialog extends StatefulWidget {
 class _ResultDialogState extends State<ResultDialog> {
   bool _isApiLoading = false;
   bool _isBluetoothLoading = false;
-  Timer? _loadingTimeoutTimer;
 
   // Kiểm tra xem hiện tại có phải là mode firmware không
   bool get isFirmwareMode => widget.currentMode == 'firmware';
@@ -72,15 +71,17 @@ class _ResultDialogState extends State<ResultDialog> {
     // Update loading states when widget updates
     if (oldWidget.isApiLoading != widget.isApiLoading ||
         oldWidget.isBluetoothLoading != widget.isBluetoothLoading) {
-      _isApiLoading = widget.isApiLoading;
-      _isBluetoothLoading = widget.isBluetoothLoading;
+      setState(() {
+        _isApiLoading = widget.isApiLoading;
+        _isBluetoothLoading = widget.isBluetoothLoading;
+      });
       // Removed timeout timer reset - no more timeouts
     }
   }
 
   @override
   void dispose() {
-    // _loadingTimeoutTimer?.cancel(); // Removed timeout timer
+    // Removed timeout timer cleanup
     super.dispose();
   }
 
@@ -371,10 +372,8 @@ class _ResultDialogState extends State<ResultDialog> {
   Widget _buildActions(BuildContext context, bool isSuccess, List<String> actionsList) {
     final theme = Theme.of(context);
     final hasApiError = widget.apiError != null;
-    final hasBluetoothError = widget.bluetoothError != null;
     // Update loading state check to properly handle non-firmware modes
-    final isAnyLoading = (_isApiLoading || _isBluetoothLoading) &&
-        !(widget.details['sent_to_desktop'] == 'Thành công' || (!isFirmwareMode && !_isApiLoading && !_isBluetoothLoading));
+    final isAnyLoading = _isApiLoading || _isBluetoothLoading;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -441,40 +440,11 @@ class _ResultDialogState extends State<ResultDialog> {
           ),
 
           // Second row of buttons - shown for firmware mode or when submit action exists
-          if (isFirmwareMode || widget.onSubmit != null)
+          if (widget.onSubmit != null)
             const SizedBox(height: 12),
 
-          // Show action buttons for firmware mode with three separate buttons
-          if (isFirmwareMode)
-            Column(
-              children: [
-                // Row 1: Call API button
-                _buildLoadingButton(
-                  context: context,
-                  isLoading: _isApiLoading && !_isBluetoothLoading,
-                  loadingText: 'Đang gọi API...',
-                  normalText: 'Cập nhật thông tin',
-                  onPressed: hasApiError || isAnyLoading ? null : widget.onCallApi,
-                  backgroundColor: AppColors.primary,
-                  icon: Icons.cloud_upload,
-                ),
-
-                const SizedBox(height: 12),
-
-                // Row 2: Send to device button
-                _buildLoadingButton(
-                  context: context,
-                  isLoading: _isBluetoothLoading && !_isApiLoading,
-                  loadingText: 'Đang kết nối...',
-                  normalText: 'Gửi tới thiết bị',
-                  onPressed: hasBluetoothError || isAnyLoading ? null : widget.onSendToDevice,
-                  backgroundColor: const Color(0xFF9333EA), // Màu tím cho bluetooth
-                  icon: Icons.bluetooth,
-                ),
-              ],
-            )
-          // For non-firmware modes, just show Submit/Confirm button if provided
-          else if (widget.onSubmit != null)
+          // Show Submit button for all modes including firmware - removed separate buttons for firmware mode
+          if (widget.onSubmit != null)
             _buildLoadingButton(
               context: context,
               isLoading: _isApiLoading,

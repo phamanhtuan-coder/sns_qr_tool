@@ -14,6 +14,7 @@ class ExportOrder extends Equatable {
   final DateTime updatedAt;
   final DateTime? deletedAt;
   final List<ExportOrderDetail> detailExport;
+  final String? customerName; // Add this field
 
   const ExportOrder({
     required this.id,
@@ -29,6 +30,7 @@ class ExportOrder extends Equatable {
     required this.updatedAt,
     this.deletedAt,
     this.detailExport = const [],
+    this.customerName, // Add this parameter
   });
 
   factory ExportOrder.fromJson(Map<String, dynamic> json) {
@@ -48,6 +50,7 @@ class ExportOrder extends Equatable {
       detailExport: (json['detail_export'] as List<dynamic>? ?? [])
           .map((detail) => ExportOrderDetail.fromJson(detail))
           .toList(),
+      customerName: json['customer_name'] as String?, // Add this field
     );
   }
 
@@ -66,6 +69,7 @@ class ExportOrder extends Equatable {
       'updated_at': updatedAt.toIso8601String(),
       'deleted_at': deletedAt?.toIso8601String(),
       'detail_export': detailExport.map((detail) => detail.toJson()).toList(),
+      'customer_name': customerName, // Add this field
     };
   }
 
@@ -84,6 +88,7 @@ class ExportOrder extends Equatable {
         updatedAt,
         deletedAt,
         detailExport,
+        customerName, // Add customerName to props
       ];
 }
 

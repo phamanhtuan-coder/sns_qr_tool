@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -223,24 +224,98 @@ class ApiClient {
     }
   }
 
+  void _logApiCall(String method, String endpoint, {
+    Map<String, dynamic>? body,
+    Map<String, String>? headers,
+    dynamic response,
+    String? error,
+  }) {
+    print('\n');
+    print('🔷🔷🔷🔷🔷🔷🔷🔷 API CALL START 🔷🔷🔷🔷🔷🔷🔷🔷');
+    print('📍 Time: ${DateTime.now().toString()}');
+    print('🌐 URL: ${_getUrlForEndpoint(endpoint)}$endpoint');
+    print('�� Method: $method');
+
+    if (headers != null) {
+      print('\n📋 Headers:');
+      headers.forEach((key, value) {
+        if (key.toLowerCase() == 'authorization') {
+          print('  $key: Bearer ${value.substring(7, min(27, value.length))}...');
+        } else {
+          print('  $key: $value');
+        }
+      });
+    }
+
+    if (body != null) {
+      print('\n📦 Request Body:');
+      _prettyPrintJson(body);
+    }
+
+    if (response != null) {
+      if (response is http.Response) {
+        print('\n📥 Response Status: ${response.statusCode}');
+        print('\n📥 Response Headers:');
+        response.headers.forEach((key, value) {
+          print('  $key: $value');
+        });
+
+        print('\n📥 Response Body:');
+        try {
+          final decodedBody = json.decode(response.body);
+          _prettyPrintJson(decodedBody);
+        } catch (e) {
+          print('  Raw: ${response.body}');
+          print('  (Could not parse as JSON: $e)');
+        }
+      } else {
+        print('\n📥 Response (non-HTTP): $response');
+      }
+    }
+
+    if (error != null) {
+      print('\n❌ Error: $error');
+      print('❌ Stack Trace:');
+      try {
+        throw Exception();
+      } catch (e, stackTrace) {
+        print(stackTrace.toString().split('\n').take(3).join('\n'));
+      }
+    }
+
+    print('🔷🔷🔷🔷🔷🔷🔷🔷 API CALL END 🔷🔷🔷🔷🔷🔷🔷🔷\n');
+  }
+
+  void _prettyPrintJson(dynamic json) {
+    const indent = '  ';
+    final encoder = JsonEncoder.withIndent(indent);
+    try {
+      print(encoder.convert(json).split('\n').map((line) => '  $line').join('\n'));
+    } catch (e) {
+      print('  $json');
+      print('  (Could not pretty print: $e)');
+    }
+  }
+
   Future<Map<String, dynamic>> get(String endpoint) async {
     try {
       final currentHeaders = await headers;
       final targetUrl = _getUrlForEndpoint(endpoint);
-      print('DEBUG: API GET request to: $targetUrl$endpoint');
-      print('DEBUG: Request Headers: $currentHeaders');
-      print('DEBUG: Authorization Header: ${currentHeaders['Authorization'] ?? 'MISSING'}');
+      
+      _logApiCall('GET', endpoint, headers: currentHeaders);
 
       final response = await _client.get(
         Uri.parse('$targetUrl$endpoint'),
         headers: currentHeaders,
       ).timeout(_timeout);
 
-      print('DEBUG: API GET response status: ${response.statusCode}');
-      print('DEBUG: API GET response headers: ${response.headers}');
-      print('DEBUG: API GET response body: ${response.body}');
+      _logApiCall('GET', endpoint, 
+        headers: currentHeaders,
+        response: response
+      );
 
       if (response.body.isEmpty) {
+        _logApiCall('GET', endpoint, error: 'Empty response body');
         return {
           'success': false,
           'errorCode': 'EMPTY_RESPONSE',
@@ -252,6 +327,7 @@ class ApiClient {
       try {
         responseData = json.decode(response.body);
       } catch (e) {
+        _logApiCall('GET', endpoint, error: 'Failed to parse response: $e');
         return {
           'success': false,
           'errorCode': 'PARSE_ERROR',
@@ -266,47 +342,21 @@ class ApiClient {
         'errorCode': response.statusCode != 200 ? response.statusCode.toString() : null,
         'message': response.statusCode != 200 ? _getErrorMessage(response) : null,
       };
-    } on SocketException catch (e) {
-      print('DEBUG: API connection error: ${e.message}');
-      return {
-        'success': false,
-        'errorCode': 'NETWORK_ERROR',
-        'message': 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.',
-      };
-    } on TimeoutException catch (e) {
-      print('DEBUG: API timeout error: ${e.message}');
-      return {
-        'success': false,
-        'errorCode': 'TIMEOUT',
-        'message': 'Yêu cầu hết thời gian. Vui lòng thử lại sau.',
-      };
-    } on FormatException catch (e) {
-      print('DEBUG: API format error: ${e.message}');
-      return {
-        'success': false,
-        'errorCode': 'FORMAT_ERROR',
-        'message': 'Định dạng phản hồi không hợp lệ.',
-      };
     } catch (e) {
-      print('DEBUG: API unexpected error: $e');
-      return {
-        'success': false,
-        'errorCode': 'UNKNOWN_ERROR',
-        'message': 'Đã xảy ra lỗi không xác định: ${e.toString()}',
-      };
+      _logApiCall('GET', endpoint, error: e.toString());
+      return _handleApiError(e);
     }
   }
 
-  Future<Map<String, dynamic>> post(
-    String endpoint,
-    Map<String, dynamic> body,
-  ) async {
+  Future<Map<String, dynamic>> post(String endpoint, Map<String, dynamic> body) async {
     try {
       final currentHeaders = await headers;
       final targetUrl = _getUrlForEndpoint(endpoint);
-      print('DEBUG: API POST request to: $targetUrl$endpoint with body: $body');
-      print('DEBUG: POST Request Headers: $currentHeaders');
-      print('DEBUG: POST Authorization Header: ${currentHeaders['Authorization'] ?? 'MISSING'}');
+      
+      _logApiCall('POST', endpoint, 
+        headers: currentHeaders,
+        body: body
+      );
 
       final response = await _client.post(
         Uri.parse('$targetUrl$endpoint'),
@@ -314,11 +364,14 @@ class ApiClient {
         headers: currentHeaders,
       ).timeout(_timeout);
 
-      print('DEBUG: API POST response status: ${response.statusCode}');
-      print('DEBUG: API POST response headers: ${response.headers}');
-      print('DEBUG: API POST response body: ${response.body}');
+      _logApiCall('POST', endpoint, 
+        headers: currentHeaders,
+        body: body,
+        response: response
+      );
 
       if (response.body.isEmpty) {
+        _logApiCall('POST', endpoint, error: 'Empty response body');
         return {
           'success': false,
           'errorCode': 'EMPTY_RESPONSE',
@@ -330,6 +383,7 @@ class ApiClient {
       try {
         responseData = json.decode(response.body);
       } catch (e) {
+        _logApiCall('POST', endpoint, error: 'Failed to parse response: $e');
         return {
           'success': false,
           'errorCode': 'PARSE_ERROR',
@@ -344,47 +398,20 @@ class ApiClient {
         'errorCode': responseData['errorCode'] ?? (response.statusCode != 200 && response.statusCode != 201 ? response.statusCode.toString() : null),
         'message': responseData['message'] ?? _getErrorMessage(response),
       };
-    } on SocketException catch (e) {
-      print('DEBUG: API connection error: ${e.message}');
-      return {
-        'success': false,
-        'errorCode': 'NETWORK_ERROR',
-        'message': 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.',
-      };
-    } on TimeoutException catch (e) {
-      print('DEBUG: API timeout error: ${e.message}');
-      return {
-        'success': false,
-        'errorCode': 'TIMEOUT',
-        'message': 'Yêu cầu hết thời gian. Vui lòng thử lại sau.',
-      };
-    } on FormatException catch (e) {
-      print('DEBUG: API format error: ${e.message}');
-      return {
-        'success': false,
-        'errorCode': 'FORMAT_ERROR',
-        'message': 'Định dạng phản hồi không hợp lệ.',
-      };
     } catch (e) {
-      print('DEBUG: API unexpected error: $e');
-      return {
-        'success': false,
-        'errorCode': 'UNKNOWN_ERROR',
-        'message': 'Đã xảy ra lỗi không xác định: ${e.toString()}',
-      };
+      _logApiCall('POST', endpoint, error: e.toString());
+      return _handleApiError(e);
     }
   }
 
   Future<Map<String, dynamic>> patch(
-    String endpoint,
-    Map<String, dynamic> body,
-  ) async {
+      String endpoint,
+      Map<String, dynamic> body,
+      ) async {
     try {
       final currentHeaders = await headers;
       final targetUrl = _getUrlForEndpoint(endpoint);
       print('DEBUG: API PATCH request to: $targetUrl$endpoint with body: $body');
-      print('DEBUG: PATCH Request Headers: $currentHeaders');
-      print('DEBUG: PATCH Authorization Header: ${currentHeaders['Authorization'] ?? 'MISSING'}');
 
       final response = await _client.patch(
         Uri.parse('$targetUrl$endpoint'),
@@ -393,7 +420,6 @@ class ApiClient {
       ).timeout(_timeout);
 
       print('DEBUG: API PATCH response status: ${response.statusCode}');
-      print('DEBUG: API PATCH response headers: ${response.headers}');
       print('DEBUG: API PATCH response body: ${response.body}');
 
       if (response.body.isEmpty) {
@@ -407,45 +433,46 @@ class ApiClient {
       Map<String, dynamic> responseData;
       try {
         responseData = json.decode(response.body);
-        print('DEBUG: Response body: $responseData');
       } catch (e) {
         return {
           'success': false,
           'errorCode': 'PARSE_ERROR',
           'message': 'Failed to parse server response',
-          'details': response.body.length > 100 ? '${response.body.substring(0, 100)}...' : response.body,
         };
       }
 
+      // Handle different response structures
+      bool isSuccess = false;
+      if (response.statusCode == 200) {
+        // Check for success field first, then status_code
+        if (responseData.containsKey('success')) {
+          isSuccess = responseData['success'] == true;
+        } else if (responseData.containsKey('status_code')) {
+          isSuccess = responseData['status_code'] == 200;
+        } else {
+          isSuccess = true; // Default to success for 200 status
+        }
+      }
+
       return {
-        'success': response.statusCode == 200 && (responseData['success'] ?? false),
-        'data': responseData['data'],
-        'errorCode': responseData['errorCode'] ?? (response.statusCode != 200 ? response.statusCode.toString() : null),
-        'message': responseData['message'] ?? _getErrorMessage(response),
+        'success': isSuccess,
+        'data': responseData['data'] ?? responseData,
+        'errorCode': !isSuccess ? (responseData['errorCode'] ?? response.statusCode.toString()) : null,
+        'message': !isSuccess ? (responseData['message'] ?? _getErrorMessage(response)) : null,
       };
     } on SocketException catch (e) {
-      print('DEBUG: API connection error: ${e.message}');
       return {
         'success': false,
         'errorCode': 'NETWORK_ERROR',
         'message': 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.',
       };
     } on TimeoutException catch (e) {
-      print('DEBUG: API timeout error: ${e.message}');
       return {
         'success': false,
         'errorCode': 'TIMEOUT',
         'message': 'Yêu cầu hết thời gian. Vui lòng thử lại sau.',
       };
-    } on FormatException catch (e) {
-      print('DEBUG: API format error: ${e.message}');
-      return {
-        'success': false,
-        'errorCode': 'FORMAT_ERROR',
-        'message': 'Định dạng phản hồi không hợp lệ.',
-      };
     } catch (e) {
-      print('DEBUG: API unexpected error: $e');
       return {
         'success': false,
         'errorCode': 'UNKNOWN_ERROR',
@@ -453,7 +480,6 @@ class ApiClient {
       };
     }
   }
-
   Future<Map<String, dynamic>> delete(String endpoint) async {
     try {
       final currentHeaders = await headers;
@@ -530,6 +556,34 @@ class ApiClient {
     }
   }
 
+  Map<String, dynamic> _handleApiError(dynamic error) {
+    if (error is SocketException) {
+      return {
+        'success': false,
+        'errorCode': 'NETWORK_ERROR',
+        'message': 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.',
+      };
+    } else if (error is TimeoutException) {
+      return {
+        'success': false,
+        'errorCode': 'TIMEOUT',
+        'message': 'Yêu cầu hết thời gian. Vui lòng thử lại sau.',
+      };
+    } else if (error is FormatException) {
+      return {
+        'success': false,
+        'errorCode': 'FORMAT_ERROR',
+        'message': 'Định dạng phản hồi không hợp lệ.',
+      };
+    } else {
+      return {
+        'success': false,
+        'errorCode': 'UNKNOWN_ERROR',
+        'message': 'Đã xảy ra lỗi không xác định: ${error.toString()}',
+      };
+    }
+  }
+
   String _getErrorMessage(http.Response response) {
     switch (response.statusCode) {
       case 400:
@@ -568,5 +622,34 @@ class ApiClient {
     } catch (e) {
       print('DEBUG: Error in debugTokenInfo: $e');
     }
+  }
+
+  // Add utilities for parsing response data
+  T? getResponseData<T>(Map<String, dynamic> response, String key) {
+    try {
+      return response['data']?[key] as T?;
+    } catch (e) {
+      print('DEBUG: Error parsing response data for key $key: $e');
+      return null;
+    }
+  }
+
+  List<T>? getResponseList<T>(Map<String, dynamic> response, String key, T Function(Map<String, dynamic>) fromJson) {
+    try {
+      final list = response['data']?[key] as List?;
+      return list?.map((item) => fromJson(item as Map<String, dynamic>)).toList();
+    } catch (e) {
+      print('DEBUG: Error parsing response list for key $key: $e');
+      return null;
+    }
+  }
+
+  void debugPrintResponse(Map<String, dynamic> response) {
+    print('\n=== API Response Debug Info ===');
+    print('Success: ${response['success']}');
+    print('Error Code: ${response['errorCode']}');
+    print('Message: ${response['message']}');
+    print('Data: ${response['data']}');
+    print('===========================\n');
   }
 }

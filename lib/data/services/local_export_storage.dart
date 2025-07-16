@@ -137,6 +137,72 @@ class LocalExportStorage {
     }
   }
 
+  /// Add a scanned item to the export progress
+  Future<bool> addScannedItem(
+    String exportId,
+    String serialNumber,
+    String templateId,
+    String batchProductionId,
+  ) async {
+    try {
+      // Get current progress or create new one
+      LocalExportProgress? progress = await getExportProgress(exportId);
+
+      if (progress == null) {
+        // Create new progress if it doesn't exist
+        progress = LocalExportProgress(
+          exportId: exportId,
+          orderId: exportId,
+          scannedProducts: [],
+          expectedQuantities: const {},
+          isCompleted: false,
+          totalExpectedItems: 0,
+          totalScannedItems: 0,
+          lastUpdated: DateTime.now(),
+          startedAt: DateTime.now(),
+        );
+      }
+
+      // Create new scanned product
+      final scannedProduct = LocalScannedProduct(
+        serialNumber: serialNumber,
+        productId: serialNumber, // Assuming productId is same as serialNumber for local storage
+        templateId: templateId,
+        batchProductionId: batchProductionId,
+        scannedAt: DateTime.now(),
+      );
+
+      // Add to scanned products if not already scanned
+      final existingIndex = progress.scannedProducts.indexWhere(
+        (product) => product.serialNumber == serialNumber
+      );
+
+      if (existingIndex == -1) {
+        // Add new product
+        final updatedProducts = List<LocalScannedProduct>.from(progress.scannedProducts)
+          ..add(scannedProduct);
+
+        // Update progress
+        final updatedProgress = progress.copyWith(
+          scannedProducts: updatedProducts,
+          totalScannedItems: updatedProducts.length,
+        );
+
+        // Save updated progress
+        await saveExportProgress(exportId, updatedProgress);
+
+        logInfo('Added scanned item $serialNumber to export $exportId');
+        return true;
+      } else {
+        logInfo('Item $serialNumber already scanned for export $exportId');
+        return true; // Consider it successful even if already scanned
+      }
+    } catch (e) {
+      logError('Failed to add scanned item to export progress', e);
+      return false;
+    }
+  }
+
   /// Remove completed export after successful sync
   Future<void> removeCompletedExport(String exportId) async {
     try {
@@ -282,6 +348,30 @@ class LocalExportProgress {
       isCompleted: true,
       totalExpectedItems: totalExpectedItems,
       totalScannedItems: totalScannedItems,
+    );
+  }
+
+  LocalExportProgress copyWith({
+    String? exportId,
+    String? orderId,
+    DateTime? startedAt,
+    DateTime? lastUpdated,
+    List<LocalScannedProduct>? scannedProducts,
+    Map<String, int>? expectedQuantities,
+    bool? isCompleted,
+    int? totalExpectedItems,
+    int? totalScannedItems,
+  }) {
+    return LocalExportProgress(
+      exportId: exportId ?? this.exportId,
+      orderId: orderId ?? this.orderId,
+      startedAt: startedAt ?? this.startedAt,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+      scannedProducts: scannedProducts ?? this.scannedProducts,
+      expectedQuantities: expectedQuantities ?? this.expectedQuantities,
+      isCompleted: isCompleted ?? this.isCompleted,
+      totalExpectedItems: totalExpectedItems ?? this.totalExpectedItems,
+      totalScannedItems: totalScannedItems ?? this.totalScannedItems,
     );
   }
 }

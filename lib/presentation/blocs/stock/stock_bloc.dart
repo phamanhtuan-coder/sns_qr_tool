@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'dart:convert'; // Add this import for JSON parsing
+import 'dart:convert';
 import 'package:smart_net_qr_scanner/data/models/device.dart';
 import 'package:smart_net_qr_scanner/data/models/stock_order.dart';
 import 'package:smart_net_qr_scanner/data/models/import_order.dart';
 import 'package:smart_net_qr_scanner/data/models/import_order_detail.dart';
 import 'package:smart_net_qr_scanner/data/models/import_order_process.dart';
 import 'package:smart_net_qr_scanner/data/models/export_order.dart';
-import 'package:smart_net_qr_scanner/data/services/stock_service.dart';
 import 'package:smart_net_qr_scanner/data/services/import_warehouse_service.dart';
 import 'package:smart_net_qr_scanner/data/services/export_warehouse_service.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/stock/stock_state.dart';
@@ -20,203 +19,298 @@ import '../../../utils/app_colors.dart';
 part 'stock_event.dart';
 
 class StockBloc extends Bloc<StockEvent, StockState> {
-  final StockService _stockService;
   final ImportWarehouseService _importWarehouseService;
   final ExportWarehouseService _exportWarehouseService;
 
-  StockBloc(this._stockService, this._importWarehouseService, this._exportWarehouseService) : super(const StockInitial()) {
-    on<LoadStockOrders>(_onLoadStockOrders);
-    on<SelectOrder>(_onSelectOrder);
-    on<ScanDevice>(_onScanDevice);
-    on<CompleteOrder>(_onCompleteOrder);
-    on<ResetStock>(_onResetStock);
-    on<StartImportOrder>(_onStartImportOrder);
+  StockBloc(this._importWarehouseService, this._exportWarehouseService) : super(const StockInitial()) {
     on<LoadImportOrders>(_onLoadImportOrders);
-    on<SelectImportOrder>(_onSelectImportOrder);
-    on<LoadImportOrderDetails>(_onLoadImportOrderDetails);
-    on<ScanImportDevice>(_onScanImportDevice);
-    on<StartExportOrder>(_onStartExportOrder);
     on<LoadExportOrders>(_onLoadExportOrders);
-    on<SelectExportOrder>(_onSelectExportOrder);
-    on<LoadExportOrderDetails>(_onLoadExportOrderDetails);
-    on<ScanExportDevice>(_onScanExportDevice);
-    on<CompleteExportOrder>(_onCompleteExportOrder);
+    on<SelectImportOrder>(_onSelectImportOrder);
+    on<StartImportOrder>(_onStartImportOrder);
+    on<StartExportOrder>(_onStartExportOrder);
+    on<LoadImportProgress>(_onLoadImportProgress);
+    on<LoadExportProgress>(_onLoadExportProgress);
+    on<ProcessImportItem>(_onProcessImportItem);
+    on<ProcessExportItem>(_onProcessExportItem);
+    on<RefreshDeviceList>(_onRefreshDeviceList);
+    on<ResetStock>(_onResetStock);
   }
 
-  Future<void> _onLoadStockOrders(
-      LoadStockOrders event,
+  Future<void> _onLoadImportOrders(
+      LoadImportOrders event,
       Emitter<StockState> emit,
       ) async {
     try {
       emit(const StockLoading());
 
-      final orders = await _stockService.getOrdersByType(event.type);
+      final result = await _importWarehouseService.getImportWarehouseNotFinish();
 
-      emit(StockLoaded(orders: orders));
+      if (result['success'] == true) {
+        final List<dynamic> ordersData = result['data'] ?? [];
+        final importOrders = ordersData.map((data) => ImportOrder.fromJson(data)).toList();
+        emit(StockImportLoaded(importOrders: importOrders));
+      } else {
+        emit(StockError(result['message'] ?? 'Không thể tải danh sách đơn nhập'));
+      }
     } catch (e, stackTrace) {
-      logError('Lỗi tải danh sách đơn hàng', e, stackTrace);
-      emit(StockError('Không thể tải danh sách đơn hàng: ${e.toString()}'));
+      logError('Error loading import orders', e, stackTrace);
+      emit(StockError('Lỗi tải danh sách đơn nhập: ${e.toString()}'));
     }
   }
 
-  Future<void> _onSelectOrder(
-      SelectOrder event,
+  Future<void> _onSelectImportOrder(
+      SelectImportOrder event,
       Emitter<StockState> emit,
       ) async {
-    if (state is! StockLoaded) return;
-
-    final currentState = state as StockLoaded;
-
     try {
-      final selectedOrder = currentState.orders
-          .firstWhere((order) => order.id == event.orderId);
+      emit(const StockLoading());
 
-      emit(currentState.copyWith(
-        selectedOrder: selectedOrder,
-        scannedItems: {},
-        scannedCounts: {},
-        scannedDevices: [],
-        isOrderComplete: false,
-      ));
-    } catch (e, stackTrace) {
-      logError('Lỗi chọn đơn hàng', e, stackTrace);
-      emit(StockError('Không thể chọn đơn hàng: ${e.toString()}'));
-    }
-  }
+      // Get order status and progress
+      final result = await _importWarehouseService.getOrderStatusAndProgress(event.importId);
 
-  Future<void> _onScanDevice(
-      ScanDevice event,
-      Emitter<StockState> emit,
-      ) async
-  {
-    if (state is! StockLoaded) return;
+      if (result['success'] == true) {
+        final data = result['data'];
+        final orderStatus = data['order_status'] ?? 0;
+        final progressData = data['progress'] ?? [];
 
-    final currentState = state as StockLoaded;
-    final selectedOrder = currentState.selectedOrder;
-
-    if (selectedOrder == null) {
-      emit(const StockError('Chưa chọn đơn hàng'));
-      return;
-    }
-
-    try {
-      final result = await _stockService.scanDevice(
-        event.deviceId,
-        selectedOrder,
-        currentState.scannedItems,
-        currentState.scannedCounts,
-        currentState.scannedDevices,
-      );
-
-      if (result['success']) {
-        final newScannedItems = Map<String, bool>.from(currentState.scannedItems);
-        final newScannedCounts = Map<String, int>.from(currentState.scannedCounts);
-        final newScannedDevices = List<Device>.from(currentState.scannedDevices);
-
-        if (selectedOrder.type == 'stockIn') {
-          newScannedItems[event.deviceId] = true;
+        if (orderStatus == 0) {
+          // Order not started - show start confirmation
+          emit(StockImportOrderNotStarted(
+            importId: event.importId,
+            orderDetails: data['order_details'] ?? {},
+          ));
         } else {
-          final device = result['device'] as Device;
-          final deviceType = device.modelType ?? 'unknown';
-          newScannedCounts[deviceType] = (newScannedCounts[deviceType] ?? 0) + 1;
-          newScannedDevices.add(device);
+          // Order already started - go directly to progress view
+          final items = (progressData as List)
+              .map((item) => ImportOrderProcess.fromJson(item))
+              .toList();
+
+          emit(StockImportInProgress(
+            orderId: event.importId,
+            items: items,
+          ));
         }
-
-        final isComplete = _checkOrderComplete(selectedOrder, newScannedItems, newScannedCounts);
-
-        emit(currentState.copyWith(
-          scannedItems: newScannedItems,
-          scannedCounts: newScannedCounts,
-          scannedDevices: newScannedDevices,
-          isOrderComplete: isComplete,
-        ));
       } else {
-        emit(StockError(result['message'] ?? 'Lỗi quét thiết bị'));
+        emit(StockError(result['message'] ?? 'Không thể tải thông tin đơn nhập'));
       }
     } catch (e, stackTrace) {
-      logError('Lỗi quét thiết bị', e, stackTrace);
-      emit(StockError('Không thể quét thiết bị: ${e.toString()}'));
+      logError('Error selecting import order', e, stackTrace);
+      emit(StockError('Lỗi chọn đơn nhập: ${e.toString()}'));
     }
   }
 
-  Future<void> _onCompleteExportOrder(
-      CompleteExportOrder event,
+  Future<void> _onStartImportOrder(
+      StartImportOrder event,
       Emitter<StockState> emit,
       ) async {
-    if (state is! StockExportLoaded) return;
-
-    final currentState = state as StockExportLoaded;
-    final selectedOrder = currentState.selectedExportOrder;
-
-    if (selectedOrder == null) {
-      emit(const StockError('Chưa chọn đơn xuất'));
-      return;
-    }
-
-    if (currentState.scannedExportItems.isEmpty) {
-      emit(const StockError('Chưa quét thiết bị nào'));
-      return;
-    }
-
     try {
       emit(const StockLoading());
 
-      // Group enhanced items by template_id for API call
-      final Map<String, List<EnhancedExportItem>> groupedItems = {};
-      for (final item in currentState.scannedExportItems) {
-        groupedItems.putIfAbsent(item.templateId, () => []).add(item);
-      }
+      // Start the import order
+      final startResult = await _importWarehouseService.startImportOrder(event.importId);
 
-      // Convert to API format
-      final List<Map<String, dynamic>> listProduct = [];
-      groupedItems.forEach((templateId, items) {
-        listProduct.add({
-          'template_id': templateId,
-          'list_serial': items.map((item) => {
-            'batch_production_id': item.batchProductionId,
-            'serial_number': item.serialNumber,
-          }).toList(),
-          'quantity': items.length,
-        });
-      });
+      if (startResult['success'] == true) {
+        // After starting, get the progress
+        final progressResult = await _importWarehouseService.getImportProgress(event.importId);
 
-      print('DEBUG: Completing export order with grouped data:');
-      print('Template groups: ${groupedItems.keys.toList()}');
-      print('Total items: ${currentState.scannedExportItems.length}');
+        if (progressResult['success'] == true) {
+          final List<dynamic> responseData = progressResult['data'] is List
+              ? progressResult['data']
+              : progressResult['data']?['data'] is List
+              ? progressResult['data']['data']
+              : [];
 
-      for (final entry in groupedItems.entries) {
-        print('Template ${entry.key}: ${entry.value.length} items');
-        print('Device types: ${entry.value.map((e) => e.deviceType).toSet().toList()}');
-      }
+          final items = responseData.map((item) => ImportOrderProcess.fromJson(item)).toList();
 
-      // Check if exportNumber is not null before proceeding
-      if (selectedOrder.exportNumber == null) {
-        emit(StockError('Export number is required but not available'));
-        return;
-      }
-
-      final result = await _exportWarehouseService.completeExportOrder(
-        exportId: selectedOrder.exportNumber!,
-        orderId: selectedOrder.id,
-        listProduct: listProduct,
-      );
-
-      if (result['success']) {
-        // Reset state to show completed order
-        emit(StockExportLoaded(
-          exportOrders: currentState.exportOrders,
-          selectedExportOrder: null, // Clear selection
-          scannedExportItems: const [],
-        ));
-
-        // Optionally reload orders to get updated status
-        add(const LoadExportOrders());
+          emit(StockImportInProgress(
+            orderId: event.importId,
+            items: items,
+          ));
+        } else {
+          emit(StockError('Không thể tải tiến độ sau khi bắt đầu'));
+        }
       } else {
-        emit(StockError(result['message'] ?? 'Không thể hoàn thành đơn xuất'));
+        emit(StockError(startResult['message'] ?? 'Không thể bắt đầu đơn nhập'));
       }
     } catch (e, stackTrace) {
-      logError('Lỗi hoàn thành đơn xuất', e, stackTrace);
-      emit(StockError('Không thể hoàn thành đơn xuất: ${e.toString()}'));
+      logError('Error starting import order', e, stackTrace);
+      emit(StockError('Lỗi bắt đầu đơn nhập: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onLoadImportProgress(
+      LoadImportProgress event,
+      Emitter<StockState> emit,
+      ) async {
+    try {
+      final result = await _importWarehouseService.getImportProgress(event.importId);
+
+      if (result['success'] == true) {
+        final List<dynamic> responseData = result['data'] is List
+            ? result['data']
+            : result['data']?['data'] is List
+            ? result['data']['data']
+            : [];
+
+        final items = responseData.map((item) => ImportOrderProcess.fromJson(item)).toList();
+
+        emit(StockImportInProgress(
+          orderId: event.importId,
+          items: items,
+        ));
+      } else {
+        emit(StockError(result['message'] ?? 'Không thể tải tiến độ nhập'));
+      }
+    } catch (e, stackTrace) {
+      logError('Error loading import progress', e, stackTrace);
+      emit(StockError('Lỗi tải tiến độ nhập: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onProcessImportItem(
+      ProcessImportItem event,
+      Emitter<StockState> emit,
+      ) async {
+    try {
+      final result = await _importWarehouseService.importOrderItem(
+        importId: event.importId,
+        serialNumber: event.serialNumber,
+        batchProductionId: event.batchProductionId ?? '',
+        templateId: event.templateId ?? '',
+      );
+
+      if (result['success'] == true) {
+        emit(StockItemProcessed(
+          orderId: event.importId,
+          serialNumber: event.serialNumber,
+          itemData: result['data'] ?? {},
+          progress: result['process'] ?? {},
+        ));
+
+        // Reload progress after processing item
+        add(LoadImportProgress(event.importId));
+      } else {
+        emit(StockError(result['message'] ?? 'Không thể xử lý thiết bị'));
+      }
+    } catch (e, stackTrace) {
+      logError('Error processing import item', e, stackTrace);
+      emit(StockError('Lỗi xử lý thiết bị: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onLoadExportOrders(
+      LoadExportOrders event,
+      Emitter<StockState> emit,
+      ) async {
+    try {
+      emit(const StockLoading());
+      // TODO: Implement export orders loading
+      emit(const StockExportLoaded(exportOrders: []));
+    } catch (e, stackTrace) {
+      logError('Error loading export orders', e, stackTrace);
+      emit(StockError('Lỗi tải danh sách đơn xuất: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onStartExportOrder(
+      StartExportOrder event,
+      Emitter<StockState> emit,
+      ) async {
+    try {
+      emit(const StockLoading());
+
+      final result = await _exportWarehouseService.startExportOrder(event.exportId);
+
+      if (result['success'] == true) {
+        emit(StockExportOrderStarted(
+          exportId: event.exportId,
+          orderDetails: result['data'] ?? {},
+        ));
+
+        add(LoadExportProgress(event.exportId));
+      } else {
+        emit(StockError(result['message'] ?? 'Không thể bắt đầu đơn xuất'));
+      }
+    } catch (e, stackTrace) {
+      logError('Error starting export order', e, stackTrace);
+      emit(StockError('Lỗi bắt đầu đơn xuất: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onLoadExportProgress(
+      LoadExportProgress event,
+      Emitter<StockState> emit,
+      ) async {
+    try {
+      final result = await _exportWarehouseService.getExportProgress(event.exportId);
+
+      if (result['success'] == true) {
+        final data = result['data'];
+        final scannedCount = data['scanned_count'] ?? 0;
+        final totalCount = data['total_count'] ?? 0;
+        final canComplete = data['can_complete'] ?? false;
+
+        emit(StockProgressLoaded(
+          orderId: event.exportId,
+          progressData: data,
+          scannedCount: scannedCount,
+          totalCount: totalCount,
+          canComplete: canComplete,
+        ));
+      } else {
+        emit(StockError(result['message'] ?? 'Không thể tải tiến độ xuất'));
+      }
+    } catch (e, stackTrace) {
+      logError('Error loading export progress', e, stackTrace);
+      emit(StockError('Lỗi tải tiến độ xuất: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onProcessExportItem(
+      ProcessExportItem event,
+      Emitter<StockState> emit,
+      ) async {
+    try {
+      final result = await _exportWarehouseService.processExportItem(
+        exportId: event.exportId,
+        serialNumber: event.serialNumber,
+        batchProductionId: event.batchProductionId,
+        templateId: event.templateId,
+      );
+
+      if (result['success'] == true) {
+        emit(StockItemProcessed(
+          orderId: event.exportId,
+          serialNumber: event.serialNumber,
+          itemData: result['data'] ?? {},
+          progress: result['data']?['progress'] ?? {},
+        ));
+
+        add(LoadExportProgress(event.exportId));
+      } else {
+        emit(StockError(result['message'] ?? 'Không thể xử lý thiết bị'));
+      }
+    } catch (e, stackTrace) {
+      logError('Error processing export item', e, stackTrace);
+      emit(StockError('Lỗi xử lý thiết bị: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onRefreshDeviceList(
+      RefreshDeviceList event,
+      Emitter<StockState> emit,
+      ) async {
+    try {
+      emit(const StockLoading());
+      if (state is StockImportInProgress) {
+        final currentState = state as StockImportInProgress;
+        await _onLoadImportProgress(LoadImportProgress(currentState.orderId), emit);
+      } else if (state is StockExportOrderStarted) {
+        final currentState = state as StockExportOrderStarted;
+        await _onLoadExportProgress(LoadExportProgress(currentState.exportId), emit);
+      }
+    } catch (e) {
+      emit(StockError('Không thể làm mới danh sách thiết bị: ${e.toString()}'));
     }
   }
 
@@ -225,551 +319,5 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       Emitter<StockState> emit,
       ) async {
     emit(const StockInitial());
-  }
-
-  Future<void> _onStartImportOrder(
-    StartImportOrder event,
-    Emitter<StockState> emit,
-  ) async {
-    try {
-      emit(const StockLoading());
-
-      final result = await _importWarehouseService.startImportOrder(event.importId);
-
-      if (result['success']) {
-        add(const LoadImportOrders());
-      } else {
-        emit(StockError(result['message'] ?? 'Không thể bắt đầu đơn nhập'));
-      }
-    } catch (e, stackTrace) {
-      logError('Lỗi bắt đầu đơn nhập', e, stackTrace);
-      emit(StockError('Không thể bắt đầu đơn nhập: ${e.toString()}'));
-    }
-  }
-
-  Future<void> _onLoadImportOrders(
-    LoadImportOrders event,
-    Emitter<StockState> emit,
-  ) async {
-    try {
-      emit(const StockLoading());
-
-      final result = await _importWarehouseService.getUnfinishedInvoices();
-      print('DEBUG: getUnfinishedInvoices response: $result');
-
-      if (result['success'] == true) {
-        final data = result['data'];
-        final List<ImportOrder> importOrders = [];
-
-        // Handle the nested response structure: { status_code: 200, data: [...] }
-        if (data != null && data['data'] is List) {
-          final ordersData = data['data'] as List;
-          for (final item in ordersData) {
-            try {
-              importOrders.add(ImportOrder.fromJson(item));
-            } catch (e) {
-              print('DEBUG: Error parsing import order: $e, item: $item');
-            }
-          }
-        } else if (data is List) {
-          // Fallback for direct array response
-          for (final item in data) {
-            try {
-              importOrders.add(ImportOrder.fromJson(item));
-            } catch (e) {
-              print('DEBUG: Error parsing import order: $e, item: $item');
-            }
-          }
-        }
-
-        print('DEBUG: Parsed ${importOrders.length} import orders');
-        emit(StockImportLoaded(importOrders: importOrders));
-      } else {
-        final errorMessage = result['message'] ?? 'Không thể tải danh sách đơn nh��p';
-        print('DEBUG: LoadImportOrders failed: $errorMessage');
-        emit(StockError(errorMessage));
-      }
-    } catch (e, stackTrace) {
-      logError('Lỗi tải danh sách đơn nhập', e, stackTrace);
-      print('DEBUG: Exception in _onLoadImportOrders: $e');
-      emit(StockError('Lỗi tải danh sách đơn nhập: ${e.toString()}'));
-    }
-  }
-
-  Future<void> _onSelectImportOrder(
-    SelectImportOrder event,
-    Emitter<StockState> emit,
-  ) async {
-    if (state is! StockImportLoaded) return;
-
-    final currentState = state as StockImportLoaded;
-
-    try {
-      final selectedOrder = currentState.importOrders
-          .firstWhere((order) => order.id == event.importId);
-
-      // First update the state with the selected order
-      emit(currentState.copyWith(
-        selectedImportOrder: selectedOrder,
-        scannedImportItems: [],
-        isLoadingDetails: true,
-      ));
-
-      // Then automatically load the order details and devices to scan
-      add(LoadImportOrderDetails(event.importId));
-
-    } catch (e, stackTrace) {
-      logError('Lỗi chọn đơn nhập', e, stackTrace);
-      emit(StockError('Không thể chọn đơn nhập: ${e.toString()}'));
-    }
-  }
-
-  Future<void> _onLoadImportOrderDetails(
-    LoadImportOrderDetails event,
-    Emitter<StockState> emit,
-  ) async {
-    if (state is! StockImportLoaded) return;
-
-    final currentState = state as StockImportLoaded;
-
-    try {
-      print('DEBUG: Loading import order details for: ${event.importId}');
-
-      // If the selected order is null or different from the requested one,
-      // find the order first to ensure we have a reference
-      final selectedOrder = currentState.selectedImportOrder?.id == event.importId
-          ? currentState.selectedImportOrder
-          : currentState.importOrders.firstWhere((order) => order.id == event.importId);
-
-      // For now, we'll just call the process endpoint since the detail endpoint
-      // might not exist or return the expected format
-      final processResult = await _importWarehouseService.getImportOrderProcess(event.importId);
-
-      if (processResult['success'] == true) {
-        final processData = processResult['data'];
-
-        // Parse process items from the API response
-        final List<ImportOrderProcess> processItems = [];
-        if (processData != null) {
-          // Handle nested response structure: { status_code: 200, data: [...] }
-          if (processData['data'] is List) {
-            final itemsData = processData['data'] as List;
-            for (final item in itemsData) {
-              try {
-                processItems.add(ImportOrderProcess.fromJson(item));
-              } catch (e) {
-                print('DEBUG: Error parsing process item: $e, item: $item');
-              }
-            }
-          } else if (processData is List) {
-            // Direct array response
-            for (final item in processData) {
-              try {
-                processItems.add(ImportOrderProcess.fromJson(item));
-              } catch (e) {
-                print('DEBUG: Error parsing process item: $e, item: $item');
-              }
-            }
-          }
-        }
-
-        print('DEBUG: Loaded ${processItems.length} process items to scan');
-
-        emit(currentState.copyWith(
-          processItems: processItems,
-          selectedImportOrder: selectedOrder,  // Ensure we maintain the selected order
-          isLoadingDetails: false,
-        ));
-      } else {
-        final errorMessage = processResult['message'] ?? 'Không thể tải quy trình nhập kho';
-        print('DEBUG: LoadImportOrderDetails failed: $errorMessage');
-        emit(currentState.copyWith(isLoadingDetails: false));
-        emit(StockError(errorMessage));
-      }
-    } catch (e, stackTrace) {
-      logError('Lỗi tải chi tiết đơn nhập', e, stackTrace);
-      print('DEBUG: Exception in _onLoadImportOrderDetails: $e');
-      emit(currentState.copyWith(isLoadingDetails: false));
-      emit(StockError('Lỗi tải chi tiết đơn nhập: ${e.toString()}'));
-    }
-  }
-
-  Future<void> _onScanImportDevice(
-    ScanImportDevice event,
-    Emitter<StockState> emit,
-  ) async {
-    if (state is! StockImportLoaded) return;
-
-    final currentState = state as StockImportLoaded;
-    final selectedOrder = currentState.selectedImportOrder;
-
-    try {
-      final deviceInfo = _parseQRData(event.qrData);
-
-      if (deviceInfo == null) {
-        emit(const StockError('Mã QR không hợp lệ'));
-        return;
-      }
-
-      // Use import_id from QR if available, otherwise use selected order
-      String importIdToUse;
-      if (deviceInfo['import_id']?.isNotEmpty == true) {
-        importIdToUse = deviceInfo['import_id']!;
-        print('DEBUG: Using import_id from QR: $importIdToUse');
-
-        // Validate that QR import_id matches selected order (if order is selected)
-        if (selectedOrder != null && selectedOrder.id != importIdToUse) {
-          emit(StockError('Mã đơn nhập trong QR (${importIdToUse}) không khớp với đơn đã chọn (${selectedOrder.id})'));
-          return;
-        }
-      } else {
-        // Fallback to selected order
-        if (selectedOrder == null) {
-          emit(const StockError('Chưa chọn đơn nhập và QR không chứa mã đơn nhập'));
-          return;
-        }
-        importIdToUse = selectedOrder.id;
-        print('DEBUG: Using selected order import_id: $importIdToUse');
-      }
-
-      final result = await _importWarehouseService.importOrderItem(
-        importId: importIdToUse,
-        serialNumber: deviceInfo['serial_number']!,
-        batchProductionId: deviceInfo['batch_production_id']!,
-        templateId: deviceInfo['template_id']!,
-      );
-
-      if (result['success']) {
-        final newScannedItems = List<ImportOrderItem>.from(currentState.scannedImportItems);
-        newScannedItems.add(ImportOrderItem(
-          importId: importIdToUse,
-          serialNumber: deviceInfo['serial_number']!,
-          batchProductionId: deviceInfo['batch_production_id']!,
-          templateId: deviceInfo['template_id']!,
-        ));
-
-        emit(currentState.copyWith(
-          scannedImportItems: newScannedItems,
-        ));
-      } else {
-        emit(StockError(result['message'] ?? 'Lỗi nhập thiết bị'));
-      }
-    } catch (e, stackTrace) {
-      logError('Lỗi quét thiết bị nhập kho', e, stackTrace);
-      emit(StockError('Không thể quét thiết bị: ${e.toString()}'));
-    }
-  }
-
-  Future<void> _onStartExportOrder(
-    StartExportOrder event,
-    Emitter<StockState> emit,
-  ) async {
-    try {
-      emit(const StockLoading());
-
-      final result = await _exportWarehouseService.startExportOrder(event.exportId);
-
-      if (result['success']) {
-        add(const LoadExportOrders());
-      } else {
-        emit(StockError(result['message'] ?? 'Không thể bắt đầu đơn xuất'));
-      }
-    } catch (e, stackTrace) {
-      logError('Lỗi bắt đầu đơn xuất', e, stackTrace);
-      emit(StockError('Không thể bắt đầu đơn xu��t: ${e.toString()}'));
-    }
-  }
-
-  Future<void> _onLoadExportOrders(
-    LoadExportOrders event,
-    Emitter<StockState> emit,
-  ) async {
-    try {
-      emit(const StockLoading());
-
-      final result = await _exportWarehouseService.getUnfinishedExportOrders();
-
-      if (result['success'] == true) {
-        final data = result['data'];
-        final List<ExportOrder> exportOrders = [];
-
-        // Handle nested response structure: { status_code: 200, data: [...] }
-        if (data != null && data['data'] is List) {
-          final ordersData = data['data'] as List;
-          for (final item in ordersData) {
-            try {
-              exportOrders.add(ExportOrder.fromJson(item));
-            } catch (e) {
-              print('DEBUG: Error parsing export order: $e, item: $item');
-            }
-          }
-        } else if (data is List) {
-          // Fallback for direct array response
-          for (final item in data) {
-            try {
-              exportOrders.add(ExportOrder.fromJson(item));
-            } catch (e) {
-              print('DEBUG: Error parsing export order: $e, item: $item');
-            }
-          }
-        }
-
-        print('DEBUG: Parsed ${exportOrders.length} export orders');
-        emit(StockExportLoaded(exportOrders: exportOrders));
-      } else {
-        final errorMessage = result['message'] ?? 'Không thể tải danh sách đơn xuất';
-        print('DEBUG: LoadExportOrders failed: $errorMessage');
-        emit(const StockInitial());
-      }
-    } catch (e, stackTrace) {
-      logError('Lỗi tải danh sách đơn xuất', e, stackTrace);
-      emit(const StockInitial());
-    }
-  }
-
-  Future<void> _onSelectExportOrder(
-    SelectExportOrder event,
-    Emitter<StockState> emit,
-  ) async {
-    if (state is! StockExportLoaded) return;
-
-    final currentState = state as StockExportLoaded;
-
-    try {
-      final selectedOrder = currentState.exportOrders
-          .firstWhere((order) => order.id == event.exportId);
-
-      emit(currentState.copyWith(
-        selectedExportOrder: selectedOrder,
-        scannedExportItems: [],
-      ));
-    } catch (e, stackTrace) {
-      logError('Lỗi ch���n đơn xuất', e, stackTrace);
-      emit(StockError('Không thể chọn đơn xuất: ${e.toString()}'));
-    }
-  }
-
-
-  Future<void> _onScanExportDevice(
-      ScanExportDevice event,
-      Emitter<StockState> emit,
-      ) async {
-    if (state is! StockExportLoaded) return;
-
-    final currentState = state as StockExportLoaded;
-    final selectedOrder = currentState.selectedExportOrder;
-
-    if (selectedOrder == null) {
-      emit(const StockError('Chưa chọn đơn xuất'));
-      return;
-    }
-
-    try {
-      final deviceInfo = _parseQRData(event.qrData);
-
-      if (deviceInfo == null) {
-        emit(const StockError('Mã QR không hợp lệ'));
-        return;
-      }
-
-      // Check if this device was already scanned
-      final alreadyScanned = currentState.scannedExportItems.any(
-            (item) => item.serialNumber == deviceInfo['serial_number'],
-      );
-
-      if (alreadyScanned) {
-        emit(const StockError('Thiết bị này đã được quét'));
-        return;
-      }
-
-      // Use the enhanced scan export device service
-      final result = await _exportWarehouseService.scanExportDevice(
-        selectedOrder.id,
-        deviceInfo['serial_number']!,
-      );
-
-      if (result['success']) {
-        final deviceDetails = result['data'];
-
-        // Create enhanced export item
-        final enhancedExportItem = EnhancedExportItem(
-          serialNumber: deviceInfo['serial_number']!,
-          templateId: deviceInfo['template_id']!,
-          batchProductionId: deviceInfo['batch_production_id']!,
-          deviceType: deviceDetails?['device_type'] ??
-              EnhancedExportItem.getDefaultDeviceType(deviceInfo['template_id']!),
-          productName: deviceDetails?['product_name'] ?? 'Product ${deviceInfo['template_id']}',
-          productImage: deviceDetails?['product_image'],
-          status: deviceDetails?['status'] ?? 'scanned',
-          scannedAt: DateTime.now(),
-        );
-
-        final newScannedItems = List<EnhancedExportItem>.from(currentState.scannedExportItems);
-        newScannedItems.add(enhancedExportItem);
-
-        emit(currentState.copyWith(
-          scannedExportItems: newScannedItems,
-        ));
-
-        // Note: Success feedback should be handled by the UI layer
-        print('DEBUG: Successfully scanned: ${enhancedExportItem.deviceType} - ${enhancedExportItem.serialNumber}');
-      } else {
-        emit(StockError(result['message'] ?? 'Lỗi quét thiết bị xuất'));
-      }
-    } catch (e, stackTrace) {
-      logError('Lỗi quét thiết bị xuất kho', e, stackTrace);
-      emit(StockError('Không thể quét thiết bị: ${e.toString()}'));
-    }
-  }
-
-  Future<void> _onCompleteOrder(
-    CompleteOrder event,
-    Emitter<StockState> emit,
-  ) async {
-    if (state is! StockLoaded) return;
-
-    final currentState = state as StockLoaded;
-    final selectedOrder = currentState.selectedOrder;
-
-    if (selectedOrder == null) {
-      emit(const StockError('Chưa chọn đơn hàng'));
-      return;
-    }
-
-    try {
-      emit(const StockLoading());
-
-      // Simple completion logic: just mark the order as complete
-      emit(currentState.copyWith(
-        isOrderComplete: true,
-      ));
-    } catch (e, stackTrace) {
-      logError('Lỗi hoàn thành đơn hàng', e, stackTrace);
-      emit(StockError('Không thể hoàn thành đơn hàng: ${e.toString()}'));
-    }
-  }
-
-  Future<void> _onLoadExportOrderDetails(
-    LoadExportOrderDetails event,
-    Emitter<StockState> emit,
-  ) async {
-    if (state is! StockExportLoaded) return;
-
-    final currentState = state as StockExportLoaded;
-
-    try {
-      print('DEBUG: Loading export order details for: ${event.exportId}');
-
-      // If the selected order is null or different from the requested one,
-      // find the order first to ensure we have a reference
-      final selectedOrder = currentState.selectedExportOrder?.id == event.exportId
-          ? currentState.selectedExportOrder
-          : currentState.exportOrders.firstWhere((order) => order.id == event.exportId);
-
-      // Emit a loading state for the detail view but keep the selected order
-      emit(currentState.copyWith(
-        selectedExportOrder: selectedOrder,
-        isLoadingDetails: true,
-      ));
-
-      // Call the API to get export order details
-      final detailResult = await _exportWarehouseService.getExportOrderDetail(event.exportId);
-
-      if (detailResult['success'] == true) {
-        final detailData = detailResult['data'];
-
-        // Also fetch the process/progress information for this export order
-        final processResult = await _exportWarehouseService.getExportProgress(event.exportId);
-
-        // Process items from the API response - this will depend on your data model
-        // For now we'll just store the raw data
-
-        print('DEBUG: Successfully loaded export order details');
-
-        // Update the state with the export order details
-        emit(currentState.copyWith(
-          selectedExportOrder: selectedOrder,
-          exportOrderDetail: detailData,
-          exportProcessItems: processResult['success'] == true ? processResult['data'] : null,
-          isLoadingDetails: false,
-        ));
-      } else {
-        final errorMessage = detailResult['message'] ?? 'Không thể tải chi tiết đơn xuất';
-        print('DEBUG: LoadExportOrderDetails failed: $errorMessage');
-
-        // Keep the selected order but mark loading as complete
-        emit(currentState.copyWith(
-          selectedExportOrder: selectedOrder,
-          isLoadingDetails: false,
-        ));
-
-        // Show error message
-        emit(StockError(errorMessage));
-      }
-    } catch (e, stackTrace) {
-      logError('Lỗi tải chi tiết đơn xuất', e, stackTrace);
-      print('DEBUG: Exception in _onLoadExportOrderDetails: $e');
-
-      // Keep the current state but mark loading as complete
-      emit(currentState.copyWith(isLoadingDetails: false));
-
-      // Show error message
-      emit(StockError('Lỗi tải chi tiết đơn xuất: ${e.toString()}'));
-    }
-  }
-
-  Map<String, String>? _parseQRData(String qrData) {
-    try {
-      // Check for JSON format
-      if (qrData.startsWith('{') && qrData.endsWith('}')) {
-        final jsonData = json.decode(qrData);
-        return {
-          'import_id': jsonData['import_id'] ?? '',
-          'serial_number': jsonData['serial_number'] ?? '',
-          'template_id': jsonData['template_id'] ?? '',
-          'batch_production_id': jsonData['batch_production_id'] ?? '',
-        };
-      }
-
-      // Fallback to pipe-separated format
-      if (qrData.contains('|')) {
-        final parts = qrData.split('|');
-        if (parts.length >= 3) {
-          return {
-            'import_id': '', // Not available in pipe format
-            'serial_number': parts[0],
-            'template_id': parts[1],
-            'batch_production_id': parts[2],
-          };
-        }
-      }
-
-      return null;
-    } catch (e) {
-      logError('Lỗi phân tích mã QR', e, null);
-      return null;
-    }
-  }
-
-  bool _checkOrderComplete(
-      StockOrder order,
-      Map<String, bool> scannedItems,
-      Map<String, int> scannedCounts,
-      ) {
-    if (order.type == 'stockIn') {
-      int totalDevices = 0;
-      for (final deviceType in order.deviceTypes) {
-        totalDevices += deviceType.devices?.length ?? 0;
-      }
-      return scannedItems.length >= totalDevices;
-    } else {
-      for (final deviceType in order.deviceTypes) {
-        final scannedCount = scannedCounts[deviceType.type] ?? 0;
-        if (scannedCount < deviceType.quantity) {
-          return false;
-        }
-      }
-      return true;
-    }
   }
 }

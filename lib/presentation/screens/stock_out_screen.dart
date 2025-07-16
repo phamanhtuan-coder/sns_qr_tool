@@ -25,6 +25,10 @@ class _StockOutScreenState extends State<StockOutScreen> {
     context.read<StockBloc>().add(const LoadExportOrders());
   }
 
+  void _handleRefreshDevices() {
+    context.read<StockBloc>().add(const RefreshDeviceList());
+  }
+
   @override
   void dispose() {
     _exportIdController.dispose();
@@ -244,7 +248,7 @@ class _StockOutScreenState extends State<StockOutScreen> {
     );
   }
 
-  void _handleCompleteExportOrder() {
+  void _handleCompleteExportOrder(String orderId) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -273,20 +277,6 @@ class _StockOutScreenState extends State<StockOutScreen> {
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Hủy'),
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              context.read<StockBloc>().add(const CompleteExportOrder());
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text('Hoàn thành'),
-          ),
         ],
       ),
     );
@@ -295,293 +285,230 @@ class _StockOutScreenState extends State<StockOutScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const CustomAppBar(
+      appBar: CustomAppBar(
         title: 'Xuất kho',
-        showThemeSwitch: true,
-        automaticallyImplyLeading: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _handleRefreshDevices,
+            tooltip: 'Làm mới danh sách thiết bị',
+          ),
+        ],
       ),
-      body: BlocListener<StockBloc, StockState>(
-        listener: (context, state) {
-          // Handle success feedback when scanning devices
-          if (state is StockExportLoaded &&
-              state.scannedExportItems.isNotEmpty) {
-            final lastItem = state.scannedExportItems.last;
-            if (lastItem.scannedAt.isAfter(DateTime.now().subtract(const Duration(seconds: 2)))) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                      'Quét thành công: ${lastItem.deviceType}\nSerial: ${lastItem.serialNumber}'
-                  ),
-                  backgroundColor: AppColors.success,
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            }
+      body: BlocBuilder<StockBloc, StockState>(
+        builder: (context, state) {
+          if (state is StockLoading) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
           }
 
-          // Handle completion success
-          if (state is StockExportLoaded &&
-              state.selectedExportOrder == null &&
-              state.scannedExportItems.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Hoàn thành đơn xuất thành công!'),
-                backgroundColor: AppColors.success,
-                duration: Duration(seconds: 3),
+          if (state is StockError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: AppColors.error,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Đã xảy ra lỗi',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      state.message,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () => context.read<StockBloc>().add(const LoadExportOrders()),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: const Text('Thử lại'),
+                        ),
+                        const SizedBox(width: 12),
+                        OutlinedButton.icon(
+                          onPressed: _showStartExportDialog,
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: AppColors.error),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Bắt đầu đơn xuất'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             );
           }
-        },
-        child: BlocBuilder<StockBloc, StockState>(
-          builder: (context, state) {
-            // Existing build logic remains the same...
-            if (state is StockLoading) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
-            }
 
-            if (state is StockError) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
+          // Handle new states for export process
+          if (state is StockExportOrderStarted) {
+            return _buildExportStartedView(state);
+          }
+
+          if (state is StockProgressLoaded) {
+            return _buildProgressView(state);
+          }
+
+          if (state is StockItemProcessed) {
+            return _buildItemProcessedView(state);
+          }
+
+          // Default view with export orders or manual input
+          if (state is StockExportLoaded) {
+            return _buildExportOrdersView(state);
+          }
+
+          // Initial view - show manual input option
+          return _buildInitialView();
+        },
+      ),
+    );
+  }
+
+  Widget _buildExportStartedView(StockExportOrderStarted state) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.local_shipping,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.error_outline,
-                          size: 48,
-                          color: AppColors.error,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
                       Text(
-                        'Đã xảy ra lỗi',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        'Đã bắt đầu đơn xuất',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
+                          color: AppColors.warning,
                         ),
                       ),
-                      const SizedBox(height: 8),
                       Text(
-                        state.message,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? AppColors.darkTextSecondary
-                              : AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: () {
-                              context.read<StockBloc>().add(const LoadExportOrders());
-                            },
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Thử lại'),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            onPressed: _showStartExportDialog,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.error,
-                            ),
-                            icon: const Icon(Icons.add),
-                            label: const Text('Nhập thủ công'),
-                          ),
-                        ],
+                        'Mã đơn: ${state.exportId}',
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
                   ),
                 ),
-              );
-            }
-
-            if (state is StockExportLoaded) {
-              return Column(
-                children: [
-                  // Export Order Selector
-                  if (state.exportOrders.isNotEmpty)
-                    ExportOrderSelector(
-                      exportOrders: state.exportOrders,
-                      selectedExportOrder: state.selectedExportOrder,
-                      onExportOrderSelected: (exportId) {
-                        context.read<StockBloc>().add(SelectExportOrder(exportId));
-                      },
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: StockActionButtons(
+                  onScanQR: _handleScanQR,
+                  hasSelectedOrder: true,
+                  isOrderComplete: false,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => context.read<StockBloc>().add(LoadExportProgress(state.exportId)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(color: AppColors.error),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
-
-                  // Content Area
-                  Expanded(
-                    child: state.selectedExportOrder != null
-                        ? _buildExportOrderContent(state)
-                        : _buildEmptyState(hasOrders: state.exportOrders.isNotEmpty),
                   ),
-
-                  // Action Buttons
-                  StockActionButtons(
-                    hasSelectedOrder: state.selectedExportOrder != null,
-                    isOrderComplete: state.scannedExportItems.isNotEmpty,
-                    onScanQR: _handleScanQR,
-                    onComplete: state.scannedExportItems.isNotEmpty ? _handleCompleteExportOrder : null,
-                  ),
-                ],
-              );
-            }
-
-            // Initial state - show start export dialog button
-            return _buildInitialState();
-          },
-        ),
+                  icon: const Icon(Icons.refresh, size: 20),
+                  label: const Text('Xem tiến độ'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildInitialState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.error.withOpacity(0.1),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.local_shipping_outlined,
-                size: 64,
-                color: AppColors.error,
-              ),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              'Xuất kho thông minh',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Quản lý xuất kho hiệu quả với công nghệ QR',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 40),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: _showStartExportDialog,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.error,
-                  foregroundColor: Colors.white,
-                  elevation: 3,
-                  shadowColor: AppColors.error.withOpacity(0.3),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                icon: const Icon(Icons.add_circle_outline, size: 24),
-                label: const Text(
-                  'Bắt đầu đơn xuất',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  context.read<StockBloc>().add(const LoadExportOrders());
-                },
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: AppColors.error.withOpacity(0.3)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: const Icon(Icons.refresh, size: 20),
-                label: const Text(
-                  'Tải danh sách đơn',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildProgressView(StockProgressLoaded state) {
+    final progressPercentage = state.totalCount > 0
+        ? (state.scannedCount / state.totalCount) * 100
+        : 0.0;
 
-  Widget _buildExportOrderContent(StockExportLoaded state) {
-    final order = state.selectedExportOrder!;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.all(24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Modern header card with order info
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.error.withOpacity(0.1),
-                  AppColors.error.withOpacity(0.05),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: AppColors.error.withOpacity(0.2),
-              ),
+              color: AppColors.warning.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.warning.withOpacity(0.3)),
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.15),
+                        color: AppColors.warning,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(
-                        Icons.local_shipping,
-                        color: AppColors.error,
+                        Icons.analytics,
+                        color: Colors.white,
                         size: 20,
                       ),
                     ),
@@ -591,367 +518,299 @@ class _StockOutScreenState extends State<StockOutScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Đơn xuất kho',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.error,
-                              fontWeight: FontWeight.w500,
+                            'Tiến độ xuất kho',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           Text(
-                            order.id,
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: Theme.of(context).brightness == Brightness.dark
-                                  ? AppColors.darkTextPrimary
-                                  : AppColors.text,
-                            ),
+                            'Mã đơn: ${state.orderId}',
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(order.status).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _getStatusText(order.status),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: _getStatusColor(order.status),
-                        ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? AppColors.darkSurface
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.calendar_today,
-                        size: 16,
-                        color: AppColors.error,
+                LinearProgressIndicator(
+                  value: progressPercentage / 100,
+                  backgroundColor: Colors.grey[300],
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.warning),
+                  minHeight: 8,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${state.scannedCount}/${state.totalCount} thiết bị',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Ngày xuất: ${_formatDate(order.exportDate)}',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
+                    ),
+                    Text(
+                      '${progressPercentage.toStringAsFixed(1)}%',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.warning,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
           const SizedBox(height: 24),
-
-          // Scanned items section
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppColors.success.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(
-                  Icons.check_circle,
-                  color: AppColors.success,
-                  size: 16,
+              Expanded(
+                child: StockActionButtons(
+                  onScanQR: _handleScanQR,
+                  hasSelectedOrder: true,
+                  isOrderComplete: false,
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Thiết bị đã quét',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.success.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${state.scannedExportItems.length}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.success,
-                  ),
-                ),
-              ),
+              const SizedBox(width: 12),
             ],
           ),
-          const SizedBox(height: 16),
-
-          if (state.scannedExportItems.isNotEmpty) ...[
-            ..._buildScannedItemsGroups(state.scannedExportItems),
-          ] else ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppColors.darkSurface
-                    : Colors.grey[50],
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? AppColors.darkDivider
-                      : AppColors.dividerColor,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[400]?.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.qr_code_scanner,
-                      size: 48,
-                      color: Colors.grey[400],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Chưa có thi��t bị nào được quét',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Sử dụng nút "Quét mã QR" để bắt đầu quét thiết bị cần xuất kho',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 
-  List<Widget> _buildScannedItemsGroups(List<dynamic> scannedItems) {
-    // Group items by template_id (device type)
-    final Map<String, List<dynamic>> groupedItems = {};
-
-    for (final item in scannedItems) {
-      final templateId = item.templateId ?? 'unknown';
-      groupedItems.putIfAbsent(templateId, () => []).add(item);
-    }
-
-    return groupedItems.entries.map((entry) {
-      final templateId = entry.key;
-      final items = entry.value;
-      final deviceTypeName = _getDeviceTypeName(templateId);
-
-      return Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? AppColors.darkSurface
-              : AppColors.cardBackground,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppColors.success.withOpacity(0.2),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+  Widget _buildItemProcessedView(StockItemProcessed state) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.success.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.success.withOpacity(0.3)),
             ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.check_circle,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Đã xử lý thiết bị',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.success,
+                            ),
+                          ),
+                          Text(
+                            'Serial: ${state.serialNumber}',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (state.progress.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Divider(),
+                  const SizedBox(height: 12),
+                  if (state.progress['current_scanned'] != null && state.progress['total_expected'] != null)
+                    Text(
+                      'Tiến độ: ${state.progress['current_scanned']}/${state.progress['total_expected']} thiết bị',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
             children: [
-              // Device type header
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.1),
+              Expanded(
+                child: StockActionButtons(
+                  onScanQR: _handleScanQR,
+                  hasSelectedOrder: true,
+                  isOrderComplete: false,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => context.read<StockBloc>().add(LoadExportProgress(state.orderId)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(color: AppColors.error),
+                    shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(
-                      Icons.devices,
-                      color: AppColors.success,
-                      size: 20,
-                    ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  label: const Text('Cập nhật tiến độ'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildExportOrdersView(StockExportLoaded state) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Header with manual input option
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.local_shipping,
+                        color: AppColors.error,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Danh sách đơn xuất',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _showStartExportDialog,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Nhập thủ công'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Export orders list
+          Expanded(
+            child: state.exportOrders.isEmpty
+                ? Center(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          deviceTypeName,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.success,
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.local_shipping_outlined,
+                            size: 48,
+                            color: Colors.grey[600],
                           ),
                         ),
+                        const SizedBox(height: 16),
                         Text(
-                          'Template ID: $templateId',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? AppColors.darkTextSecondary
-                                : AppColors.textSecondary,
+                          'Không có đơn xuất nào',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Nhấn "Nhập thủ công" để bắt đầu',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.grey[500],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      '${items.length} thiết bị',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.success,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // List of scanned items
-              ...items.asMap().entries.map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? AppColors.darkBackground
-                        : Colors.grey[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppColors.success.withOpacity(0.1),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${index + 1}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.success,
-                              fontSize: 12,
+                  )
+                : ListView.builder(
+                    itemCount: state.exportOrders.length,
+                    itemBuilder: (context, index) {
+                      final order = state.exportOrders[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.local_shipping,
+                              color: AppColors.error,
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Serial Number',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? AppColors.darkTextSecondary
-                                    : AppColors.textSecondary,
+                          title: Text(
+                            order.exportNumber?.toString() ?? 'N/A',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(order.customerName ?? 'N/A'),
+                          trailing: ElevatedButton(
+                            onPressed: () => context.read<StockBloc>().add(
+                              StartExportOrder(order.exportNumber?.toString() ?? order.id),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.error,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
                               ),
                             ),
-                            Text(
-                              item.serialNumber ?? 'N/A',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Text(
-                                  'Batch: ',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).brightness == Brightness.dark
-                                        ? AppColors.darkTextSecondary
-                                        : AppColors.textSecondary,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    item.batchProductionId ?? 'N/A',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.primary,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                            child: const Text('Bắt đầu'),
+                          ),
                         ),
-                      ),
-                      const Icon(
-                        Icons.check_circle,
-                        color: AppColors.success,
-                        size: 20,
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                );
-              }).toList(),
-            ],
           ),
-        ),
-      );
-    }).toList();
+        ],
+      ),
+    );
   }
 
-  Widget _buildEmptyState({required bool hasOrders}) {
+  Widget _buildInitialView() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -962,23 +821,21 @@ class _StockOutScreenState extends State<StockOutScreen> {
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.local_shipping_outlined,
+                Icons.local_shipping,
                 size: 64,
                 color: AppColors.error,
               ),
             ),
             const SizedBox(height: 24),
             Text(
-              hasOrders ? 'Chưa chọn đơn xuất' : 'Không có đơn xuất nào',
+              'Xuất kho',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              hasOrders
-                  ? 'Vui lòng chọn đơn xuất từ danh sách để bắt đầu quá trình xuất kho'
-                  : 'Không tìm thấy đơn xuất nào đang thực hiện. Hãy bắt đầu đơn xuất mới.',
+              'Bắt đầu quá trình xuất kho bằng cách chọn đơn xuất hoặc nhập mã thủ công',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).brightness == Brightness.dark
@@ -986,70 +843,26 @@ class _StockOutScreenState extends State<StockOutScreen> {
                     : AppColors.textSecondary,
               ),
             ),
-            if (!hasOrders) ...[
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
                 onPressed: _showStartExportDialog,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.error,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add, size: 20),
                 label: const Text('Bắt đầu đơn xuất'),
               ),
-            ],
+            ),
           ],
         ),
       ),
     );
-  }
-
-  String _getDeviceTypeName(String templateId) {
-    // Map template IDs to device type names
-    // This should be based on your actual device template mapping
-    switch (templateId) {
-      case '1':
-        return 'Smart Sensor';
-      case '2':
-        return 'Control Unit';
-      case '3':
-        return 'Gateway Device';
-      case '4':
-        return 'Communication Module';
-      case '5':
-        return 'Power Module';
-      default:
-        return 'Unknown Device';
-    }
-  }
-
-  Color _getStatusColor(int status) {
-    switch (status) {
-      case 0:
-        return Colors.grey;
-      case 1:
-        return AppColors.warning;
-      case 2:
-        return AppColors.success;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  String _getStatusText(int status) {
-    switch (status) {
-      case 0:
-        return 'Chờ xử lý';
-      case 1:
-        return 'Đang xuất';
-      case 2:
-        return 'Hoàn thành';
-      default:
-        return 'Không xác định';
-    }
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 }

@@ -168,7 +168,6 @@ class AppRouter {
           settings,
           BlocProvider(
             create: (context) => StockBloc(
-              getIt<StockService>(),
               getIt<ImportWarehouseService>(),
               getIt<ExportWarehouseService>(),
             ),
@@ -182,7 +181,6 @@ class AppRouter {
           settings,
           BlocProvider(
             create: (context) => StockBloc(
-              getIt<StockService>(),
               getIt<ImportWarehouseService>(),
               getIt<ExportWarehouseService>(),
             ),

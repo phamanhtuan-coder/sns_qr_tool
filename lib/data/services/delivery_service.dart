@@ -217,6 +217,66 @@ class DeliveryService {
     }
   }
 
+  /// Bắt đầu đơn shipping (tương ứng với startShippingOrder API)
+  Future<Map<String, dynamic>> startShippingOrder(String orderId) async {
+    try {
+      final result = await _apiClient.patch('/order/admin/shipping-order', {
+        'order_id': orderId,
+      });
+
+      if (result['success'] == true) {
+        return {
+          'success': true,
+          'message': 'Đã bắt đầu giao hàng thành công',
+          'data': result['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': result['message'] ?? 'Không thể bắt đầu giao hàng',
+        };
+      }
+    } catch (e, stackTrace) {
+      logError('Error starting shipping order', e, stackTrace);
+      return {
+        'success': false,
+        'message': 'Không thể bắt đầu giao hàng: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Xác nhận hoàn thành đơn shipping với ảnh chứng minh (base64)
+  Future<Map<String, dynamic>> confirmShippingOrder({
+    required String orderId,
+    required String imageProofBase64,
+  }) async {
+    try {
+      final result = await _apiClient.patch('/order/admin/finish-shipping-order', {
+        'order_id': orderId,
+        'image_proof': imageProofBase64,
+      });
+
+      if (result['success'] == true) {
+        return {
+          'success': true,
+          'message': 'Hoàn thành giao hàng thành công',
+          'data': result['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': result['message'] ?? 'Không thể hoàn thành giao hàng',
+        };
+      }
+    } catch (e, stackTrace) {
+      logError('Error confirming shipping order', e, stackTrace);
+      return {
+        'success': false,
+        'message': 'Không thể hoàn thành giao hàng: ${e.toString()}',
+      };
+    }
+  }
+
   // Helper methods
 
   Future<Position?> getCurrentLocation() async {

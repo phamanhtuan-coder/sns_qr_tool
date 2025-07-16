@@ -40,20 +40,24 @@ class ProductionService {
       };
     }
 
-    // Handle stockin and stockout operations - they should use warehouse services instead
+    // Handle stockin and stockout as features under development
     if (functionId == 'stockin' || functionId == 'stockout') {
       return {
         'success': false,
-        'message': 'Tính năng đang phát triển - Sử dụng warehouse services',
+        'message': 'Tính năng đang phát triển',
         'errorCode': 'FEATURE_001',
         'isFeatureInDevelopment': true,
       };
     }
 
-    // For production modes (identify, firmware, testing, packaging), extract only serial_number
+    // For production modes (identify, firmware, testing, packaging), extract data from QR
     try {
+      // Parse the QR data to extract serial_number, batch_production_id, and template_id
       final qrData = QrData.fromJsonString(qrRawData);
       final serialNumber = qrData.serialNumber;
+      final batchProductionId = qrData.batchProductionId;
+      final templateId = qrData.templateId;
+      final templateName = qrData.templateName;
 
       if (serialNumber.isEmpty) {
         return {
@@ -63,12 +67,46 @@ class ProductionService {
         };
       }
 
-      // All production modes use assembly stage with in_progress status
-      final stage = 'assembly';
-      final status = 'in_progress';
+      // Define stage and status based on the selected function
+      String stage;
+      String status;
+
+      switch (functionId) {
+        case 'identify':
+          stage = 'assembly';
+          status = 'in_progress';
+          break;
+        case 'firmware':
+          stage = 'assembly';
+          status = 'firmware_upload';
+          break;
+        case 'testing':
+          stage = 'qc';
+          status = 'firmware_uploaded';
+          break;
+        case 'packaging':
+          stage = 'completed';
+          status = 'pending_packaging';
+          break;
+        default:
+          // Default fallback
+          stage = 'qc';
+          status = 'pending';
+      }
 
       print('DEBUG: Processing serial $serialNumber with stage: $stage, status: $status');
       final result = await updateDeviceStage(serialNumber, stage, status);
+
+      // Add the extracted fields to the result for display in the dialog
+      if (!result.containsKey('data')) {
+        result['data'] = {};
+      }
+      result['data']['serial_number'] = serialNumber;
+      result['data']['batch_production_id'] = batchProductionId;
+      result['data']['template_id'] = templateId;
+      if (templateName != null && templateName.isNotEmpty) {
+        result['data']['template_name'] = templateName;
+      }
 
       // Ensure consistent response format
       if (!result.containsKey('success')) {

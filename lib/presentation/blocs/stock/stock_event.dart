@@ -34,24 +34,11 @@ class ScanDevice extends StockEvent {
   List<Object?> get props => [deviceId];
 }
 
-class CompleteOrder extends StockEvent {
-  const CompleteOrder();
-}
-
 class ResetStock extends StockEvent {
   const ResetStock();
 }
 
-// New events for import warehouse
-class StartImportOrder extends StockEvent {
-  final String importId;
-
-  const StartImportOrder(this.importId);
-
-  @override
-  List<Object?> get props => [importId];
-}
-
+// Import-specific events
 class LoadImportOrders extends StockEvent {
   const LoadImportOrders();
 }
@@ -65,25 +52,46 @@ class SelectImportOrder extends StockEvent {
   List<Object?> get props => [importId];
 }
 
-class LoadImportOrderDetails extends StockEvent {
+class StartImportOrder extends StockEvent {
   final String importId;
 
-  const LoadImportOrderDetails(this.importId);
+  const StartImportOrder(this.importId);
 
   @override
   List<Object?> get props => [importId];
 }
 
-class ScanImportDevice extends StockEvent {
-  final String qrData;
+class LoadImportProgress extends StockEvent {
+  final String importId;
 
-  const ScanImportDevice(this.qrData);
+  const LoadImportProgress(this.importId);
 
   @override
-  List<Object?> get props => [qrData];
+  List<Object?> get props => [importId];
 }
 
-// New events for export warehouse
+class ProcessImportItem extends StockEvent {
+  final String importId;
+  final String serialNumber;
+  final String? batchProductionId;
+  final String? templateId;
+
+  const ProcessImportItem({
+    required this.importId,
+    required this.serialNumber,
+    this.batchProductionId,
+    this.templateId,
+  });
+
+  @override
+  List<Object?> get props => [importId, serialNumber, batchProductionId, templateId];
+}
+
+// Export-specific events
+class LoadExportOrders extends StockEvent {
+  const LoadExportOrders();
+}
+
 class StartExportOrder extends StockEvent {
   final String exportId;
 
@@ -93,37 +101,35 @@ class StartExportOrder extends StockEvent {
   List<Object?> get props => [exportId];
 }
 
-class LoadExportOrders extends StockEvent {
-  const LoadExportOrders();
-}
-
-class SelectExportOrder extends StockEvent {
+class LoadExportProgress extends StockEvent {
   final String exportId;
 
-  const SelectExportOrder(this.exportId);
+  const LoadExportProgress(this.exportId);
 
   @override
   List<Object?> get props => [exportId];
 }
 
-class LoadExportOrderDetails extends StockEvent {
+class ProcessExportItem extends StockEvent {
   final String exportId;
+  final String serialNumber;
+  final String? batchProductionId;
+  final String? templateId;
 
-  const LoadExportOrderDetails(this.exportId);
+  const ProcessExportItem({
+    required this.exportId,
+    required this.serialNumber,
+    this.batchProductionId,
+    this.templateId,
+  });
 
   @override
-  List<Object?> get props => [exportId];
+  List<Object?> get props => [exportId, serialNumber, batchProductionId, templateId];
 }
 
-class ScanExportDevice extends StockEvent {
-  final String qrData;
-
-  const ScanExportDevice(this.qrData);
+class RefreshDeviceList extends StockEvent {
+  const RefreshDeviceList();
 
   @override
-  List<Object?> get props => [qrData];
-}
-
-class CompleteExportOrder extends StockEvent {
-  const CompleteExportOrder();
+  List<Object?> get props => [];
 }

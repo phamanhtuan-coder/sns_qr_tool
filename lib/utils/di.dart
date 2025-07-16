@@ -75,7 +75,6 @@ void setupDependencies() {
     if (!getIt.isRegistered<StockBloc>()) {
       getIt.registerSingleton<StockBloc>(
         StockBloc(
-          getIt<StockService>(),
           getIt<ImportWarehouseService>(),
           getIt<ExportWarehouseService>(),
         ),
