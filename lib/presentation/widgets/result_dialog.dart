@@ -16,7 +16,7 @@ class ResultDialog extends StatefulWidget {
   final VoidCallback? onRetry;
   final VoidCallback? onDashboard;
   final VoidCallback? onSendToDevice;
-  final VoidCallback? onCallApi; // Add new callback for API-only calls
+  final VoidCallback? onCallApi;
   final bool isLoading;
   final bool isApiLoading;
   final bool isBluetoothLoading;
@@ -36,7 +36,7 @@ class ResultDialog extends StatefulWidget {
     this.onRetry,
     this.onDashboard,
     this.onSendToDevice,
-    this.onCallApi, // Add to constructor
+    this.onCallApi,
     this.isLoading = false,
     this.isApiLoading = false,
     this.isBluetoothLoading = false,
@@ -53,36 +53,27 @@ class _ResultDialogState extends State<ResultDialog> {
   bool _isApiLoading = false;
   bool _isBluetoothLoading = false;
 
-  // Kiểm tra xem hiện tại có phải là mode firmware không
   bool get isFirmwareMode => widget.currentMode == 'firmware';
+  bool get isStockInMode => widget.currentMode == 'stockin';
 
   @override
   void initState() {
     super.initState();
     _isApiLoading = widget.isApiLoading;
     _isBluetoothLoading = widget.isBluetoothLoading;
-    // Removed loading timeout timer - let API complete naturally
   }
 
   @override
   void didUpdateWidget(ResultDialog oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Update loading states when widget updates
     if (oldWidget.isApiLoading != widget.isApiLoading ||
         oldWidget.isBluetoothLoading != widget.isBluetoothLoading) {
       setState(() {
         _isApiLoading = widget.isApiLoading;
         _isBluetoothLoading = widget.isBluetoothLoading;
       });
-      // Removed timeout timer reset - no more timeouts
     }
-  }
-
-  @override
-  void dispose() {
-    // Removed timeout timer cleanup
-    super.dispose();
   }
 
   @override
@@ -90,9 +81,9 @@ class _ResultDialogState extends State<ResultDialog> {
     final isSuccess = widget.type == 'success';
     final formattedDetails = _formatDetails();
     final hasErrors = widget.apiError != null || widget.bluetoothError != null;
-    // Fix loading state logic to handle both firmware and non-firmware modes
     final isAnyLoading = (_isApiLoading || _isBluetoothLoading) &&
-        !(widget.details['sent_to_desktop'] == 'Thành công' || (!isFirmwareMode && !_isApiLoading && !_isBluetoothLoading));
+        !(widget.details['sent_to_desktop'] == 'Thành công' ||
+            (!isFirmwareMode && !_isApiLoading && !_isBluetoothLoading));
 
     return Stack(
       children: [
@@ -131,7 +122,6 @@ class _ResultDialogState extends State<ResultDialog> {
             ),
           ),
         ),
-        // Add loading overlay
         if (isAnyLoading)
           Positioned.fill(
             child: Container(
@@ -156,11 +146,7 @@ class _ResultDialogState extends State<ResultDialog> {
                       const CircularProgressIndicator(),
                       const SizedBox(height: 16),
                       Text(
-                        _isApiLoading && _isBluetoothLoading
-                            ? 'Đang xử lý...'
-                            : _isApiLoading
-                                ? 'Đang gửi API...'
-                                : 'Đang kết nối Bluetooth...',
+                        _getLoadingText(),
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
@@ -173,11 +159,25 @@ class _ResultDialogState extends State<ResultDialog> {
     );
   }
 
+  String _getLoadingText() {
+    if (_isApiLoading && _isBluetoothLoading) {
+      return 'Đang xử lý...';
+    } else if (_isApiLoading) {
+      if (isStockInMode) {
+        return 'Đang nhập kho...';
+      }
+      return 'Đang gửi API...';
+    } else if (_isBluetoothLoading) {
+      return 'Đang kết nối Bluetooth...';
+    }
+    return 'Đang xử lý...';
+  }
+
   Widget _buildHeader(BuildContext context, bool isSuccess) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: (isSuccess ? Colors.green : Colors.red).withAlpha(26), // 0.1 * 255 ≈ 26
+        color: (isSuccess ? Colors.green : Colors.red).withAlpha(26),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Row(
@@ -229,46 +229,94 @@ class _ResultDialogState extends State<ResultDialog> {
         ),
       ),
       child: Column(
-        children: formattedDetails.map((detail) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                flex: 2,
-                child: Text(
-                  detail.key,
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-              ),
-              Expanded(
-                flex: 3,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        detail.value,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        textAlign: TextAlign.right,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title for QR data section
+          if (_hasQrData())
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.qr_code,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Thông tin mã QR:',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
                     ),
-                    if (detail.value.isNotEmpty)
-                      IconButton(
-                        icon: const Icon(Icons.copy, size: 16),
-                        padding: const EdgeInsets.all(4),
-                        constraints: const BoxConstraints(),
-                        onPressed: () => _copyToClipboard(context, detail),
-                      ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        )).toList(),
+            ),
+
+          // Details list
+          ...formattedDetails.map((detail) => _buildDetailRow(context, detail)),
+        ],
       ),
     );
+  }
+
+  Widget _buildDetailRow(BuildContext context, MapEntry<String, String> detail) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).dividerColor.withOpacity(0.3),
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              detail.key,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[600],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: Row(
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    detail.value,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (detail.value.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.copy, size: 16),
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () => _copyToClipboard(context, detail),
+                    tooltip: 'Sao chép',
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _hasQrData() {
+    return widget.details.containsKey('serial_number') ||
+        widget.details.containsKey('batch_production_id') ||
+        widget.details.containsKey('template_id');
   }
 
   Widget _buildErrorSection(BuildContext context) {
@@ -372,7 +420,6 @@ class _ResultDialogState extends State<ResultDialog> {
   Widget _buildActions(BuildContext context, bool isSuccess, List<String> actionsList) {
     final theme = Theme.of(context);
     final hasApiError = widget.apiError != null;
-    // Update loading state check to properly handle non-firmware modes
     final isAnyLoading = _isApiLoading || _isBluetoothLoading;
 
     return Container(
@@ -384,10 +431,8 @@ class _ResultDialogState extends State<ResultDialog> {
       ),
       child: Column(
         children: [
-          // First row of buttons - Always shown for basic actions
           Row(
             children: [
-              // Button 1: Scan Again (Quét lại) - Always shown
               Expanded(
                 child: TextButton(
                   onPressed: isAnyLoading ? null : (widget.onRetry ?? widget.onClose),
@@ -418,7 +463,6 @@ class _ResultDialogState extends State<ResultDialog> {
 
               const SizedBox(width: 12),
 
-              // Button 2: Dashboard - Always shown
               Expanded(
                 child: _buildLoadingButton(
                   context: context,
@@ -429,7 +473,7 @@ class _ResultDialogState extends State<ResultDialog> {
                     Navigator.of(context).pop();
                     Navigator.of(context).pushNamedAndRemoveUntil(
                       AppRouter.dashboard,
-                      (route) => false,
+                          (route) => false,
                     );
                   },
                   backgroundColor: isSuccess ? AppColors.success : AppColors.error,
@@ -439,21 +483,18 @@ class _ResultDialogState extends State<ResultDialog> {
             ],
           ),
 
-          // Second row of buttons - shown for firmware mode or when submit action exists
-          if (widget.onSubmit != null)
+          if (widget.onSubmit != null) ...[
             const SizedBox(height: 12),
-
-          // Show Submit button for all modes including firmware - removed separate buttons for firmware mode
-          if (widget.onSubmit != null)
             _buildLoadingButton(
               context: context,
               isLoading: _isApiLoading,
-              loadingText: 'Đang xử lý...',
-              normalText: 'Xác nhận',
+              loadingText: isStockInMode ? 'Đang nhập kho...' : 'Đang xử lý...',
+              normalText: isStockInMode ? 'Nhập kho' : 'Xác nhận',
               onPressed: hasApiError || isAnyLoading ? null : widget.onSubmit,
               backgroundColor: AppColors.primary,
-              icon: Icons.check_circle,
+              icon: isStockInMode ? Icons.inventory : Icons.check_circle,
             ),
+          ],
         ],
       ),
     );
@@ -471,69 +512,85 @@ class _ResultDialogState extends State<ResultDialog> {
 
   List<MapEntry<String, String>> _formatDetails() {
     final formattedDetails = <MapEntry<String, String>>[];
-    // Updated allowed keys to include new QR data fields
-    final allowedKeys = [
-      'device_serial',
+
+    // Define the order and allowed keys for QR data
+    final qrDataKeys = [
       'serial_number',
       'batch_production_id',
       'template_id',
       'template_name',
+    ];
+
+    final otherKeys = [
+      'device_serial',
       'stage',
       'status'
     ];
 
-    widget.details.forEach((key, value) {
-      // Only show allowed keys
-      if (!allowedKeys.contains(key)) return;
+    // Process QR data keys first (in order)
+    for (final key in qrDataKeys) {
+      if (widget.details.containsKey(key)) {
+        final value = widget.details[key]!;
 
-      // Skip empty template_name values to avoid showing empty entries
-      if (key == 'template_name' && (value.isEmpty || value == 'null')) return;
+        // Skip empty template_name values
+        if (key == 'template_name' && (value.isEmpty || value == 'null')) continue;
 
-      // Format keys for display
-      String displayKey = key
-          .replaceAll(RegExp(r'([A-Z])'), ' \$1')
-          .replaceAll('_', ' ')
-          .trim()
-          .split(' ')
-          .map((word) => word.substring(0, 1).toUpperCase() + word.substring(1))
-          .join(' ');
+        final displayKey = _getDisplayKey(key);
+        final displayValue = _getDisplayValue(key, value);
 
-      // Custom display names for specific keys
-      switch (key) {
-        case 'serial_number':
-          displayKey = 'Số seri';
-          break;
-        case 'batch_production_id':
-          displayKey = 'Mã lô sản xuất';
-          break;
-        case 'template_id':
-          displayKey = 'Mã template';
-          break;
-        case 'template_name':
-          displayKey = 'Tên template';
-          break;
-        case 'device_serial':
-          displayKey = 'Serial thiết bị';
-          break;
-        case 'stage':
-          displayKey = 'Giai đoạn';
-          break;
-        case 'status':
-          displayKey = 'Trạng thái';
-          break;
+        formattedDetails.add(MapEntry(displayKey, displayValue));
       }
+    }
 
-      // Format values for display
-      String displayValue = value;
-      if (key == 'stage') {
-        displayValue = value == 'assembly' ? 'Lắp ráp' : value;
-      } else if (key == 'status') {
-        displayValue = value == 'in_progress' ? 'Đang xử lý' : value;
+    // Process other keys
+    for (final key in otherKeys) {
+      if (widget.details.containsKey(key)) {
+        final value = widget.details[key]!;
+        final displayKey = _getDisplayKey(key);
+        final displayValue = _getDisplayValue(key, value);
+
+        formattedDetails.add(MapEntry(displayKey, displayValue));
       }
-
-      formattedDetails.add(MapEntry(displayKey, displayValue));
-    });
+    }
 
     return formattedDetails;
+  }
+
+  String _getDisplayKey(String key) {
+    switch (key) {
+      case 'serial_number':
+        return 'Số serial';
+      case 'batch_production_id':
+        return 'Mã lô sản xuất';
+      case 'template_id':
+        return 'Mã template';
+      case 'template_name':
+        return 'Tên template';
+      case 'device_serial':
+        return 'Serial thiết bị';
+      case 'stage':
+        return 'Giai đoạn';
+      case 'status':
+        return 'Trạng thái';
+      default:
+        return key
+            .replaceAll(RegExp(r'([A-Z])'), ' \$1')
+            .replaceAll('_', ' ')
+            .trim()
+            .split(' ')
+            .map((word) => word.substring(0, 1).toUpperCase() + word.substring(1))
+            .join(' ');
+    }
+  }
+
+  String _getDisplayValue(String key, String value) {
+    switch (key) {
+      case 'stage':
+        return value == 'assembly' ? 'Lắp ráp' : value;
+      case 'status':
+        return value == 'in_progress' ? 'Đang xử lý' : value;
+      default:
+        return value;
+    }
   }
 }

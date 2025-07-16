@@ -63,35 +63,44 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       Emitter<StockState> emit,
       ) async {
     try {
-      emit(const StockLoading());
+      // Store current state BEFORE emitting loading
+      if (state is StockImportLoaded) {
+        final currentState = state as StockImportLoaded;
+        final selectedOrder = currentState.importOrders
+            .firstWhere((order) => order.id == event.importId);
 
-      // Get order status and progress
-      final result = await _importWarehouseService.getOrderStatusAndProgress(event.importId);
+        emit(const StockLoading()); // Move this AFTER getting the order
 
-      if (result['success'] == true) {
-        final data = result['data'];
-        final orderStatus = data['order_status'] ?? 0;
-        final progressData = data['progress'] ?? [];
+        final orderStatus = selectedOrder.status;
 
         if (orderStatus == 0) {
-          // Order not started - show start confirmation
           emit(StockImportOrderNotStarted(
             importId: event.importId,
-            orderDetails: data['order_details'] ?? {},
+            orderDetails: {'status': orderStatus},
           ));
         } else {
-          // Order already started - go directly to progress view
-          final items = (progressData as List)
-              .map((item) => ImportOrderProcess.fromJson(item))
-              .toList();
+          // Order already started - get progress directly
+          final progressResult = await _importWarehouseService.getImportProgress(event.importId);
 
-          emit(StockImportInProgress(
-            orderId: event.importId,
-            items: items,
-          ));
+          if (progressResult['success'] == true) {
+            final List<dynamic> responseData = progressResult['data'] is List
+                ? progressResult['data']
+                : progressResult['data']?['data'] is List
+                ? progressResult['data']['data']
+                : [];
+
+            final items = responseData.map((item) => ImportOrderProcess.fromJson(item)).toList();
+
+            emit(StockImportInProgress(
+              orderId: event.importId,
+              items: items,
+            ));
+          } else {
+            emit(StockError('Không thể tải tiến độ đơn nhập'));
+          }
         }
       } else {
-        emit(StockError(result['message'] ?? 'Không thể tải thông tin đơn nhập'));
+        emit(StockError('Trạng thái không hợp lệ'));
       }
     } catch (e, stackTrace) {
       logError('Error selecting import order', e, stackTrace);
