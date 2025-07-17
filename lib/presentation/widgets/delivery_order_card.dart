@@ -78,6 +78,8 @@ class _DeliveryOrderCardState extends State<DeliveryOrderCard>
         return AppColors.error;
       case DeliveryStatus.cancelled:
         return AppColors.iconSecondary;
+      default:
+        return AppColors.info;
     }
   }
 
@@ -221,14 +223,14 @@ class _DeliveryOrderCardState extends State<DeliveryOrderCard>
                     ),
 
                     // Action buttons for different states
-                    if (widget.order.status == DeliveryStatus.assigned) ...[
+                    if (widget.order.status.canStart) ...[
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: widget.onStartDelivery,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
+                            backgroundColor: AppColors.success,
                             foregroundColor: AppColors.textOnPrimary,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
@@ -238,8 +240,7 @@ class _DeliveryOrderCardState extends State<DeliveryOrderCard>
                       ),
                     ],
 
-                    if (widget.order.status == DeliveryStatus.started ||
-                        widget.order.status == DeliveryStatus.inTransit) ...[
+                    if (widget.order.status.isShipping) ...[
                       const SizedBox(height: 16),
                       Row(
                         children: [

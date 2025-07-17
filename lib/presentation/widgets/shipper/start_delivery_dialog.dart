@@ -6,10 +6,12 @@ import 'package:smart_net_qr_scanner/utils/app_colors.dart';
 
 class StartDeliveryDialog extends StatelessWidget {
   final String orderId;
+  final DeliveryBloc deliveryBloc; // Add this parameter
 
   const StartDeliveryDialog({
     super.key,
     required this.orderId,
+    required this.deliveryBloc, // Add this parameter
   });
 
   @override
@@ -85,7 +87,8 @@ class StartDeliveryDialog extends StatelessWidget {
         ElevatedButton(
           onPressed: () {
             Navigator.of(context).pop();
-            context.read<DeliveryBloc>().add(StartDeliveryOrder(orderId));
+            // Use the passed DeliveryBloc instance instead of context.read<DeliveryBloc>()
+            deliveryBloc.add(StartShippingOrder(orderId));
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Đã bắt đầu giao hàng!'),

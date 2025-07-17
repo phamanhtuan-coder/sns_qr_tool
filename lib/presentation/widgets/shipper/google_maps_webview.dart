@@ -54,7 +54,7 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
       setState(() {
         _isWebViewSupported = false;
         _isLoading = false;
-        _error = 'WebView không được hỗ trợ trên n��n tảng này';
+        _error = 'WebView không được hỗ trợ trên nền tảng này';
       });
     }
   }
@@ -244,8 +244,8 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
                     });
                     
                     const statusDisplayNames = {
-                        'assigned': 'Đã giao việc',
-                        'started': 'Đã bắt đầu',
+                        'assigned': 'Chờ giao hàng',
+                        'started': 'Đang giao hàng',
                         'inTransit': 'Đang giao hàng',
                         'delivered': 'Đã giao thành công',
                         'failed': 'Giao thất bại',

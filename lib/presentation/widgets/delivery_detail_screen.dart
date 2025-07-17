@@ -111,6 +111,8 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen>
         return AppColors.error;
       case DeliveryStatus.cancelled:
         return Colors.grey;
+      default:
+        return AppColors.info;
     }
   }
 
@@ -402,9 +404,9 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen>
             onPressed: _isSubmitting
                 ? null
                 : () {
-                    Navigator.of(dialogContext).pop();
-                    _completeDelivery(isSuccessful);
-                  },
+              Navigator.of(dialogContext).pop();
+              _completeDelivery(isSuccessful);
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: isSuccessful ? AppColors.success : AppColors.error,
               shape: RoundedRectangleBorder(
@@ -446,9 +448,9 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isSuccessful
-                ? 'Đã xác nhận giao hàng thành công!'
-                : 'Đã xác nhận giao hàng thất bại!'
+              isSuccessful
+                  ? 'Đã xác nhận giao hàng thành công!'
+                  : 'Đã xác nhận giao hàng thất bại!'
           ),
           backgroundColor: isSuccessful ? AppColors.success : AppColors.warning,
         ),
@@ -539,32 +541,32 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen>
       ),
       floatingActionButton: widget.order.status.canDeliver
           ? ScaleTransition(
-              scale: _fabAnimation,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FloatingActionButton(
-                    onPressed: () => _showCompleteDeliveryDialog(false),
-                    backgroundColor: AppColors.error,
-                    foregroundColor: Colors.white,
-                    heroTag: 'fail',
-                    child: const Icon(Icons.close),
-                  ),
-                  const SizedBox(height: 16),
-                  FloatingActionButton.extended(
-                    onPressed: () => _showCompleteDeliveryDialog(true),
-                    backgroundColor: AppColors.success,
-                    foregroundColor: Colors.white,
-                    heroTag: 'success',
-                    icon: const Icon(Icons.check),
-                    label: const Text(
-                      'Giao thành công',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
+        scale: _fabAnimation,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FloatingActionButton(
+              onPressed: () => _showCompleteDeliveryDialog(false),
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              heroTag: 'fail',
+              child: const Icon(Icons.close),
+            ),
+            const SizedBox(height: 16),
+            FloatingActionButton.extended(
+              onPressed: () => _showCompleteDeliveryDialog(true),
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+              heroTag: 'success',
+              icon: const Icon(Icons.check),
+              label: const Text(
+                'Giao thành công',
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
-            )
+            ),
+          ],
+        ),
+      )
           : null,
     );
   }
@@ -695,7 +697,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen>
                 'Số điện thoại',
                 widget.order.customerPhone,
                 Icons.phone,
-                () => _makePhoneCall(widget.order.customerPhone),
+                    () => _makePhoneCall(widget.order.customerPhone),
               ),
               _buildInfoRowWithAction(
                 'Địa chỉ giao hàng',
@@ -1143,11 +1145,11 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen>
   }
 
   Widget _buildInfoRowWithAction(
-    String label,
-    String value,
-    IconData actionIcon,
-    VoidCallback onAction,
-  ) {
+      String label,
+      String value,
+      IconData actionIcon,
+      VoidCallback onAction,
+      ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(

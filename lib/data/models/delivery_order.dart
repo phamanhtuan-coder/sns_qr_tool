@@ -53,7 +53,7 @@ class DeliveryOrder extends Equatable {
       createdDate: DateTime.parse(json['created_date'] as String),
       expectedDeliveryDate: DateTime.parse(json['expected_delivery_date'] as String),
       status: DeliveryStatus.values.firstWhere(
-        (s) => s.toString().split('.').last == json['status'],
+            (s) => s.toString().split('.').last == json['status'],
         orElse: () => DeliveryStatus.assigned,
       ),
       items: (json['items'] as List<dynamic>)
@@ -141,33 +141,33 @@ class DeliveryOrder extends Equatable {
   }
 
   bool get isOverdue => DateTime.now().isAfter(expectedDeliveryDate) &&
-                      status != DeliveryStatus.delivered &&
-                      status != DeliveryStatus.cancelled;
+      status != DeliveryStatus.delivered &&
+      status != DeliveryStatus.cancelled;
 
   Duration get timeUntilDeadline => expectedDeliveryDate.difference(DateTime.now());
 
   @override
   List<Object?> get props => [
-        id,
-        customerName,
-        customerPhone,
-        customerAddress,
-        pickupAddress,
-        createdDate,
-        expectedDeliveryDate,
-        status,
-        items,
-        totalAmount,
-        notes,
-        trackingCode,
-        startedAt,
-        deliveredAt,
-        deliveryPhoto,
-        deliveryNote,
-        isUrgent,
-        latitude,
-        longitude,
-      ];
+    id,
+    customerName,
+    customerPhone,
+    customerAddress,
+    pickupAddress,
+    createdDate,
+    expectedDeliveryDate,
+    status,
+    items,
+    totalAmount,
+    notes,
+    trackingCode,
+    startedAt,
+    deliveredAt,
+    deliveryPhoto,
+    deliveryNote,
+    isUrgent,
+    latitude,
+    longitude,
+  ];
 }
 
 class DeliveryItem extends Equatable {
@@ -210,33 +210,46 @@ class DeliveryItem extends Equatable {
 }
 
 enum DeliveryStatus {
-  assigned,    // Đã giao việc
-  started,     // Đã bắt đầu giao
-  inTransit,   // Đang vận chuyển
-  delivered,   // Đã giao thành công
-  failed,      // Giao thất bại
-  cancelled,   // Đã hủy
+  cancelled,     // -1: Đã huỷ
+  pending,       // 0: Chờ xác nhận
+  preparing,     // 1: Đang chuẩn bị hàng
+  assigned,      // 2: Chờ giao hàng (Shipper đã nhận)
+  started,       // 3: Đang giao hàng
+  inTransit,     // Legacy - maps to started
+  delivered,     // 4: Đã giao hàng
+  completed,     // 5: Hoàn thành
+  failed,        // Failed delivery
 }
 
 extension DeliveryStatusExtension on DeliveryStatus {
   String get displayName {
     switch (this) {
+      case DeliveryStatus.cancelled:
+        return 'Đã hủy';
+      case DeliveryStatus.pending:
+        return 'Chờ xác nhận';
+      case DeliveryStatus.preparing:
+        return 'Đang chuẩn bị';
       case DeliveryStatus.assigned:
-        return 'Đã giao việc';
+        return 'Chờ giao hàng';
       case DeliveryStatus.started:
-        return 'Đã bắt đầu';
       case DeliveryStatus.inTransit:
         return 'Đang giao hàng';
       case DeliveryStatus.delivered:
-        return 'Đã giao thành công';
+        return 'Đã giao hàng';
+      case DeliveryStatus.completed:
+        return 'Hoàn thành';
       case DeliveryStatus.failed:
         return 'Giao thất bại';
-      case DeliveryStatus.cancelled:
-        return 'Đã hủy';
     }
   }
 
-  bool get canStart => this == DeliveryStatus.assigned;
-  bool get canDeliver => this == DeliveryStatus.started || this == DeliveryStatus.inTransit;
-  bool get isCompleted => this == DeliveryStatus.delivered || this == DeliveryStatus.failed || this == DeliveryStatus.cancelled;
+  bool get canStart => this == DeliveryStatus.assigned; // status = 2
+  bool get canDeliver => this == DeliveryStatus.started || this == DeliveryStatus.inTransit; // status = 3
+  bool get isCompleted => this == DeliveryStatus.delivered || this == DeliveryStatus.completed || this == DeliveryStatus.cancelled || this == DeliveryStatus.failed;
+
+  // For shipper tabs
+  bool get isPendingShipping => this == DeliveryStatus.assigned; // Tab 1: Chờ giao
+  bool get isShipping => this == DeliveryStatus.started || this == DeliveryStatus.inTransit; // Tab 2: Đang giao
+  bool get isDelivered => this == DeliveryStatus.delivered; // Tab 3: Đã hoàn thành (only status 4)
 }

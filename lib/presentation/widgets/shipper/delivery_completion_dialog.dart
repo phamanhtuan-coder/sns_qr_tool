@@ -1,17 +1,20 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import 'package:smart_net_qr_scanner/data/models/delivery_order.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/delivery/delivery_bloc.dart';
 import 'package:smart_net_qr_scanner/utils/app_colors.dart';
 
 class DeliveryCompletionDialog extends StatefulWidget {
   final DeliveryOrder order;
+  final DeliveryBloc deliveryBloc; // Add this parameter
 
   const DeliveryCompletionDialog({
     super.key,
     required this.order,
+    required this.deliveryBloc, // Add this parameter
   });
 
   @override
@@ -23,6 +26,7 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
   String? photoPath;
   String note = '';
   bool isSuccessful = true;
+  bool _isSubmitting = false;
 
   Future<String?> _capturePhoto() async {
     try {
@@ -68,23 +72,60 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
     }
   }
 
-  void _onComplete() {
-    Navigator.of(context).pop();
-    context.read<DeliveryBloc>().add(CompleteDeliveryOrder(
-      orderId: widget.order.id,
-      photoPath: photoPath!,
-      note: note,
-      isSuccessful: isSuccessful,
-    ));
+  Future<void> _onComplete() async {
+    if (photoPath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng chụp ảnh xác nhận giao hàng'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isSuccessful
-            ? 'Đã xác nhận giao hàng thành công!'
-            : 'Đã ghi nhận giao hàng thất bại!'),
-        backgroundColor: isSuccessful ? AppColors.success : AppColors.error,
-      ),
-    );
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      // Convert image to base64
+      final bytes = await File(photoPath!).readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      Navigator.of(context).pop();
+
+      // Use the passed DeliveryBloc instance instead of context.read<DeliveryBloc>()
+      widget.deliveryBloc.add(
+        ConfirmShippingOrder(
+          orderId: widget.order.id,
+          imageProofBase64: base64Image,
+        ),
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isSuccessful
+              ? 'Đã xác nhận giao hàng thành công!'
+              : 'Đã ghi nhận giao hàng thất bại!'),
+          backgroundColor: isSuccessful ? AppColors.success : AppColors.error,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi xử lý ảnh: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   @override
@@ -135,7 +176,7 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
             _buildPhotoCaptureSection(isDark),
             const SizedBox(height: 16),
 
-            // Delivery status selection
+            // Delivery status selection (simplified for now - API only supports success)
             _buildStatusSelection(isDark),
             const SizedBox(height: 16),
 
@@ -146,7 +187,7 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
           child: Text(
             'Hủy',
             style: TextStyle(
@@ -155,17 +196,27 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
           ),
         ),
         ElevatedButton(
-          onPressed: photoPath != null ? _onComplete : null,
+          onPressed: (_isSubmitting || photoPath == null) ? null : _onComplete,
           style: ElevatedButton.styleFrom(
             backgroundColor: isSuccessful ? AppColors.success : AppColors.error,
             foregroundColor: AppColors.textOnPrimary,
           ),
-          child: Text(isSuccessful ? 'Xác nhận giao' : 'Ghi nhận thất bại'),
+          child: _isSubmitting
+              ? const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          )
+              : Text(isSuccessful ? 'Xác nhận giao' : 'Ghi nhận thất bại'),
         ),
       ],
     );
   }
 
+  // ... rest of the build methods remain the same
   Widget _buildPhotoCaptureSection(bool isDark) {
     return Container(
       width: double.infinity,

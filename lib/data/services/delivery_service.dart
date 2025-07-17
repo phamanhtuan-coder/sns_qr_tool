@@ -33,11 +33,34 @@ class DeliveryService {
 
         // Kiểm tra nếu data section có 'data' field
         if (dataSection is Map<String, dynamic> && dataSection['data'] != null) {
-          final ordersData = dataSection['data'];
+          final nestedData = dataSection['data']; // This is the nested data object
 
-          // Xử lý trường hợp data là empty list hoặc null
-          if (ordersData is List) {
-            print('DEBUG: DeliveryService.getAssignedOrders() - Found ${ordersData.length} orders');
+          // Check if nested data has 'data' field containing the actual orders
+          if (nestedData is Map<String, dynamic> && nestedData['data'] != null) {
+            final ordersData = nestedData['data']; // This is the actual orders array
+
+            // Xử lý trường hợp data là empty list hoặc null
+            if (ordersData is List) {
+              print('DEBUG: DeliveryService.getAssignedOrders() - Found ${ordersData.length} orders');
+
+              if (ordersData.isEmpty) {
+                print('DEBUG: DeliveryService.getAssignedOrders() - Empty orders list, returning empty');
+                return [];
+              }
+
+              final mappedOrders = ordersData.map((orderJson) => _mapOrderFromApi(orderJson)).toList();
+              print('DEBUG: DeliveryService.getAssignedOrders() - Successfully mapped ${mappedOrders.length} orders');
+              return mappedOrders;
+            } else {
+              print('DEBUG: DeliveryService.getAssignedOrders() - Orders data is not a list: $ordersData');
+              return [];
+            }
+          }
+
+          // Fallback: Try direct access to dataSection['data'] as array (old format)
+          else if (dataSection['data'] is List) {
+            final ordersData = dataSection['data'] as List;
+            print('DEBUG: DeliveryService.getAssignedOrders() - Found ${ordersData.length} orders (fallback)');
 
             if (ordersData.isEmpty) {
               print('DEBUG: DeliveryService.getAssignedOrders() - Empty orders list, returning empty');
@@ -45,15 +68,9 @@ class DeliveryService {
             }
 
             final mappedOrders = ordersData.map((orderJson) => _mapOrderFromApi(orderJson)).toList();
-            print('DEBUG: DeliveryService.getAssignedOrders() - Successfully mapped ${mappedOrders.length} orders');
+            print('DEBUG: DeliveryService.getAssignedOrders() - Successfully mapped ${mappedOrders.length} orders (fallback)');
             return mappedOrders;
-          } else {
-            print('DEBUG: DeliveryService.getAssignedOrders() - Orders data is not a list: $ordersData');
-            return [];
           }
-        } else {
-          print('DEBUG: DeliveryService.getAssignedOrders() - Data section invalid: $dataSection');
-          return [];
         }
       }
 
@@ -496,28 +513,26 @@ class DeliveryService {
     DeliveryStatus mapStatus(int status) {
       print('DEBUG: DeliveryService._mapOrderFromApi() - Mapping status: $status');
       switch (status) {
-        case 2: // PENDING_SHIPPING
-          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: assigned');
-          return DeliveryStatus.assigned;
-        case 3: // SHIPPING
-          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: started');
-          return DeliveryStatus.started;
-        case 4: // DELIVERED
-          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: delivered');
-          return DeliveryStatus.delivered;
-        case 5: // COMPLETED
-          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: delivered (completed)');
-          return DeliveryStatus.delivered;
         case -1: // CANCELLED
-          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: cancelled');
           return DeliveryStatus.cancelled;
+        case 0: // PENDING
+          return DeliveryStatus.pending;
+        case 1: // PREPARING
+          return DeliveryStatus.preparing;
+        case 2: // PENDING_SHIPPING - Chờ giao hàng
+          return DeliveryStatus.assigned;
+        case 3: // SHIPPING - Đang giao hàng
+          return DeliveryStatus.started;
+        case 4: // DELIVERED - Đã giao hàng
+          return DeliveryStatus.delivered;
+        case 5: // COMPLETED - Hoàn thành
+          return DeliveryStatus.completed;
         default:
-          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: assigned (default)');
           return DeliveryStatus.assigned;
       }
     }
 
-    // Map products từ API response
+    // Map products từ API response - matches exact API structure
     List<DeliveryItem> mapProducts(List<dynamic>? products) {
       print('DEBUG: DeliveryService._mapOrderFromApi() - Mapping products: ${products?.length ?? 0} items');
       if (products == null) return [];
@@ -526,29 +541,49 @@ class DeliveryService {
         id: product['id']?.toString() ?? '',
         name: product['name']?.toString() ?? '',
         quantity: product['quantity'] ?? 0,
-        price: (product['sale_price'] ?? 0).toDouble(),
-        description: product['description']?.toString(),
+        price: 0.0, // API doesn't provide price per item
+        description: 'Tồn kho: ${product['total_stock'] ?? 'N/A'}',
       )).toList();
 
       print('DEBUG: DeliveryService._mapOrderFromApi() - Successfully mapped ${mappedProducts.length} products');
       return mappedProducts;
     }
 
+    // Parse date from API if provided (API doesn't seem to have order_date in this response)
+    DateTime parseDate(dynamic dateStr) {
+      if (dateStr == null || dateStr.toString().isEmpty) {
+        return DateTime.now();
+      }
+      try {
+        return DateTime.parse(dateStr.toString());
+      } catch (e) {
+        return DateTime.now();
+      }
+    }
+
     final mappedOrder = DeliveryOrder(
+      // Exact API field mapping
       id: orderJson['id']?.toString() ?? '',
       customerName: orderJson['customer_name']?.toString() ?? '',
-      customerPhone: _extractPhoneFromOrder(orderJson),
+      customerPhone: orderJson['phone']?.toString() ?? '0000000000',
       customerAddress: orderJson['address']?.toString() ?? '',
-      pickupAddress: 'Kho SmartNet', // Default pickup address
-      createdDate: _parseDateTime(orderJson['order_date']),
-      expectedDeliveryDate: _parseDateTime(orderJson['order_date']).add(const Duration(days: 1)), // Mock expected date
-      status: mapStatus(orderJson['status'] ?? 0),
+
+      // Default/calculated fields
+      pickupAddress: 'Kho SmartNet',
+      createdDate: parseDate(orderJson['created_date']), // Use current time if not provided
+      expectedDeliveryDate: DateTime.now().add(const Duration(days: 1)),
+
+      // Direct API mapping
+      status: mapStatus(orderJson['status'] ?? 2),
       items: mapProducts(orderJson['products']),
-      totalAmount: (orderJson['total_amount'] ?? 0).toDouble(),
+      totalAmount: (orderJson['amount'] ?? 0).toDouble(),
       notes: orderJson['note']?.toString(),
+
+      // Generated fields
       trackingCode: _generateTrackingCode(orderJson['id']?.toString() ?? ''),
-      isUrgent: false, // Backend chưa có field này
-      // Coordinates - backend chưa có, sử dụng mock data cho Vietnam
+      isUrgent: false, // Not provided in API
+
+      // Mock coordinates for Vietnam (API doesn't provide real coordinates)
       latitude: _getMockLatitude(),
       longitude: _getMockLongitude(),
     );
@@ -556,9 +591,11 @@ class DeliveryService {
     print('DEBUG: DeliveryService._mapOrderFromApi() - Mapped order successfully:');
     print('  ID: ${mappedOrder.id}');
     print('  Customer: ${mappedOrder.customerName}');
-    print('  Status: ${mappedOrder.status}');
+    print('  Phone: ${mappedOrder.customerPhone}');
+    print('  Address: ${mappedOrder.customerAddress}');
+    print('  Status: ${mappedOrder.status} (API status: ${orderJson['status']})');
+    print('  Amount: ${mappedOrder.totalAmount}');
     print('  Items count: ${mappedOrder.items.length}');
-    print('  Total amount: ${mappedOrder.totalAmount}');
 
     return mappedOrder;
   }

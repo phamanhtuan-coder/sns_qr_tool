@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -23,6 +24,7 @@ class ShipperScreen extends StatefulWidget {
 class _ShipperScreenState extends State<ShipperScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
+  StreamSubscription<Position>? _locationSubscription;
 
   @override
   void initState() {
@@ -52,9 +54,11 @@ class _ShipperScreenState extends State<ShipperScreen>
 
   @override
   void dispose() {
+    _locationSubscription?.cancel();
     _tabController.dispose();
     super.dispose();
   }
+
 
   void _startLocationTracking() async {
     try {
@@ -75,32 +79,48 @@ class _ShipperScreenState extends State<ShipperScreen>
         return;
       }
 
-      // Listen to location changes
-      Geolocator.getPositionStream(
+      // Store subscription and check mounted state
+      _locationSubscription = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
           distanceFilter: 10,
         ),
       ).listen((Position position) {
-        context.read<DeliveryBloc>().add(UpdateLocation(position));
+        // Check if widget is still mounted before accessing context
+        if (mounted) {
+          context.read<DeliveryBloc>().add(UpdateLocation(position));
+        }
       });
     } catch (e) {
       print('Error starting location tracking: $e');
     }
   }
 
+
   void _showStartDeliveryDialog(String orderId) {
+    // Pass the DeliveryBloc instance to avoid context issues
+    final deliveryBloc = context.read<DeliveryBloc>();
+
     showDialog(
       context: context,
-      builder: (context) => StartDeliveryDialog(orderId: orderId),
+      builder: (context) => StartDeliveryDialog(
+        orderId: orderId,
+        deliveryBloc: deliveryBloc, // Pass the bloc instance
+      ),
     );
   }
 
   void _showDeliveryCompletionDialog(DeliveryOrder order) {
+    // Pass the DeliveryBloc instance to avoid context issues
+    final deliveryBloc = context.read<DeliveryBloc>();
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => DeliveryCompletionDialog(order: order),
+      builder: (context) => DeliveryCompletionDialog(
+        order: order,
+        deliveryBloc: deliveryBloc, // Pass the bloc instance
+      ),
     );
   }
 
@@ -201,6 +221,7 @@ class _ShipperScreenState extends State<ShipperScreen>
   }
 
   Widget _buildAssignedOrders(DeliveryLoaded state) {
+    // Tab 1: Chờ giao - Status = 2 (PENDING_SHIPPING) -> assigned enum
     final assignedOrders = state.orders
         .where((order) => order.status == DeliveryStatus.assigned)
         .toList();
@@ -234,10 +255,9 @@ class _ShipperScreenState extends State<ShipperScreen>
   }
 
   Widget _buildInProgressOrders(DeliveryLoaded state) {
+    // Tab 2: Đang giao - Status = 3 (SHIPPING) -> started enum
     final inProgressOrders = state.orders
-        .where((order) =>
-            order.status == DeliveryStatus.started ||
-            order.status == DeliveryStatus.inTransit)
+        .where((order) => order.status == DeliveryStatus.started)
         .toList();
 
     if (inProgressOrders.isEmpty) {
@@ -267,8 +287,9 @@ class _ShipperScreenState extends State<ShipperScreen>
   }
 
   Widget _buildCompletedOrders(DeliveryLoaded state) {
+    // Tab 3: Đã hoàn thành - Status = 4 (DELIVERED) -> delivered enum
     final completedOrders = state.orders
-        .where((order) => order.status.isCompleted)
+        .where((order) => order.status == DeliveryStatus.delivered)
         .toList();
 
     if (completedOrders.isEmpty) {
