@@ -169,7 +169,7 @@ class ExportWarehouseService {
     }
   }
 
-  /// Export a single product
+  /// Export a single product - FIXED VERSION
   Future<Map<String, dynamic>> exportProduct({
     required String exportId,
     required String orderId,
@@ -178,39 +178,53 @@ class ExportWarehouseService {
     required String templateId,
   }) async {
     try {
+      print('DEBUG: Exporting product - ExportId: $exportId, OrderId: $orderId, Serial: $serialNumber');
+
       final response = await _apiClient.patch('/export-warehouse/export-order', {
-        'export_id': exportId,
+        'export_id': int.tryParse(exportId) ?? exportId, // Handle both string and int
         'order_id': orderId,
         'serial_number': serialNumber,
         'batch_production_id': batchProductionId,
         'template_id': templateId,
       });
 
+      print('DEBUG: Export product response: $response');
+
+      // Simplified response handling - check API response success first
       if (response['success'] == true) {
+        print('DEBUG: Export product success - API returned success=true');
         return {
           'success': true,
           'message': 'Xuất sản phẩm thành công',
           'data': response['data'],
         };
-      } else {
-        // Handle different response structures
-        final statusCode = response['data']?['status_code'];
-        final data = response['data']?['data'];
+      }
 
-        if (statusCode == 200 && data != null) {
+      // Check if it's a nested response with status_code
+      if (response['data'] is Map) {
+        final nestedData = response['data'] as Map<String, dynamic>;
+        final statusCode = nestedData['status_code'];
+
+        if (statusCode == 200) {
+          print('DEBUG: Export product success - Nested response with status_code=200');
           return {
             'success': true,
             'message': 'Xuất sản phẩm thành công',
-            'data': data,
+            'data': nestedData['data'] ?? nestedData,
           };
         }
-
-        return {
-          'success': false,
-          'message': response['message'] ?? 'Không thể xuất sản phẩm',
-        };
       }
+
+      // If we get here, it's an error
+      final errorMessage = response['message'] ?? 'Không thể xuất sản phẩm';
+      print('DEBUG: Export product failed - Message: $errorMessage');
+
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
     } catch (e, stackTrace) {
+      print('DEBUG: Export product exception: $e');
       logError('Lỗi xuất sản phẩm', e, stackTrace);
       return {
         'success': false,
@@ -510,7 +524,7 @@ class ExportWarehouseService {
     }
   }
 
-  /// Process an export item
+  /// Process an export item - FIXED VERSION
   Future<Map<String, dynamic>> processExportItem({
     required String exportId,
     required String orderId,
@@ -519,6 +533,8 @@ class ExportWarehouseService {
     String? templateId,
   }) async {
     try {
+      print('DEBUG: Processing export item - ExportId: $exportId, OrderId: $orderId, Serial: $serialNumber');
+
       final result = await exportProduct(
         exportId: exportId,
         orderId: orderId,
@@ -527,7 +543,10 @@ class ExportWarehouseService {
         templateId: templateId ?? _extractTemplateId(serialNumber),
       );
 
-      if (result['success']) {
+      print('DEBUG: Process export item result: $result');
+
+      if (result['success'] == true) {
+        print('DEBUG: Export item processed successfully');
         // Update local progress after successful API call
         await _localStorage.addScannedItem(
           exportId,
@@ -535,9 +554,19 @@ class ExportWarehouseService {
           templateId ?? _extractTemplateId(serialNumber),
           batchProductionId ?? _extractBatchId(serialNumber),
         );
-      }
 
-      return result;
+        return {
+          'success': true,
+          'message': 'Xuất thiết bị thành công',
+          'data': result['data'],
+        };
+      } else {
+        print('DEBUG: Export item processing failed: ${result['message']}');
+        return {
+          'success': false,
+          'message': result['message'] ?? 'Không thể xuất thiết bị khỏi kho',
+        };
+      }
     } catch (e) {
       print('DEBUG: Error processing export item: $e');
       return {

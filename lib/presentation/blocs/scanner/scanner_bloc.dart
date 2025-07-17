@@ -186,12 +186,15 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           return;
         }
 
+        print('DEBUG: Starting stockin submission...');
         emit(currentState.copyWith(isApiLoading: true));
 
         final result = await _importWarehouseService.importOrderItemFromQr(
           importId: _currentOrderId!,
           qrData: qrData,
         );
+
+        print('DEBUG: Stockin result: $result');
 
         if (result['success'] == true) {
           // Trigger refresh of import progress in StockBloc
@@ -214,6 +217,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
             isApiLoading: false,
           ));
         } else {
+          print('DEBUG: Stockin failed: ${result['message']}');
           emit(currentState.copyWith(
             isApiLoading: false,
             apiError: result['message'] ?? 'Không thể nhập thiết bị vào kho',
@@ -222,7 +226,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
         return;
       }
 
-      // Handle stockout
+      // Handle stockout - FIXED VERSION
       if (functionId == 'stockout') {
         if (_currentExportId == null || _currentOrderId == null) {
           emit(ScannerFailure(error: {
@@ -233,40 +237,63 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
           return;
         }
 
+        print('DEBUG: Starting stockout submission...');
+        print('DEBUG: ExportId: $_currentExportId, OrderId: $_currentOrderId');
+
+        // Set loading state
         emit(currentState.copyWith(isApiLoading: true));
 
-        final result = await _exportWarehouseService.processExportItem(
-          exportId: _currentExportId!,
-          orderId: _currentOrderId!,
-          serialNumber: qrData.serialNumber,
-          batchProductionId: qrData.batchProductionId,
-          templateId: qrData.templateId,
-        );
+        try {
+          final result = await _exportWarehouseService.processExportItem(
+            exportId: _currentExportId!,
+            orderId: _currentOrderId!,
+            serialNumber: qrData.serialNumber,
+            batchProductionId: qrData.batchProductionId,
+            templateId: qrData.templateId,
+          );
 
-        if (result['success'] == true) {
-          // Trigger refresh of export progress in StockBloc
-          final stockBloc = getIt<StockBloc>();
-          stockBloc.add(LoadExportProgress(_currentExportId!));
+          print('DEBUG: Stockout API result: $result');
 
-          emit(ScannerSuccess(
-            result: {
-              'title': 'Xuất kho thành công',
-              'message': 'Đã xuất thiết bị khỏi kho thành công',
-              'details': {
-                'serial_number': qrData.serialNumber,
-                'batch_production_id': qrData.batchProductionId,
-                'template_id': qrData.templateId,
-                if (qrData.templateName != null) 'template_name': qrData.templateName!,
-                'status': 'Đã xuất kho',
+          // Always reset loading state first
+          if (result['success'] == true) {
+            print('DEBUG: Stockout successful');
+
+            // Trigger refresh of export progress in StockBloc
+            final stockBloc = getIt<StockBloc>();
+            stockBloc.add(LoadExportProgress(_currentExportId!));
+
+            // Emit success state with loading=false
+            emit(ScannerSuccess(
+              result: {
+                'title': 'Xuất kho thành công',
+                'message': 'Đã xuất thiết bị khỏi kho thành công',
+                'details': {
+                  'serial_number': qrData.serialNumber,
+                  'batch_production_id': qrData.batchProductionId,
+                  'template_id': qrData.templateId,
+                  if (qrData.templateName != null) 'template_name': qrData.templateName!,
+                  'status': 'Đã xuất kho',
+                },
+                'actions': const ['retry', 'dashboard'],
               },
-              'actions': const ['retry', 'dashboard'],
-            },
-            isApiLoading: false,
-          ));
-        } else {
+              isApiLoading: false, // Explicitly set to false
+            ));
+          } else {
+            print('DEBUG: Stockout failed: ${result['message']}');
+
+            // Emit error state with loading=false
+            emit(currentState.copyWith(
+              isApiLoading: false, // Explicitly set to false
+              apiError: result['message'] ?? 'Không thể xuất thiết bị khỏi kho',
+            ));
+          }
+        } catch (apiException) {
+          print('DEBUG: Stockout API exception: $apiException');
+
+          // Handle API exceptions - always reset loading
           emit(currentState.copyWith(
             isApiLoading: false,
-            apiError: result['message'] ?? 'Không thể xuất thiết bị khỏi kho',
+            apiError: 'Lỗi kết nối API: ${apiException.toString()}',
           ));
         }
         return;
@@ -306,6 +333,9 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
         ));
       }
     } catch (e) {
+      print('DEBUG: Exception in _handleSubmitScan: $e');
+
+      // Always reset loading state on exceptions
       emit(currentState.copyWith(
         isApiLoading: false,
         apiError: 'Lỗi hệ thống: ${e.toString()}',

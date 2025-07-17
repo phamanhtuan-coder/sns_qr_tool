@@ -167,13 +167,14 @@ class ImportWarehouseService {
     }
   }
 
-  /// Import order item using QR data
+  /// Import order item using QR data - FIXED VERSION
   Future<Map<String, dynamic>> importOrderItemFromQr({
     required String importId,
     required QrData qrData,
   }) async {
     try {
       print('DEBUG: Importing order item from QR - ImportID: $importId, QR Data: $qrData');
+
       final result = await _apiClient.post(
         '/import-warehouse/import-order',
         {
@@ -186,7 +187,10 @@ class ImportWarehouseService {
 
       print('DEBUG: Import order item response: $result');
 
+      // Simplified response handling - check API response success first
       if (result['success'] == true) {
+        print('DEBUG: Import order item success - API returned success=true');
+
         // After successful import, get updated process
         final processResult = await getImportOrderProcess(importId);
         return {
@@ -196,9 +200,31 @@ class ImportWarehouseService {
         };
       }
 
+      // Check if it's a nested response with status_code
+      if (result['data'] is Map) {
+        final nestedData = result['data'] as Map<String, dynamic>;
+        final statusCode = nestedData['status_code'];
+
+        if (statusCode == 200) {
+          print('DEBUG: Import order item success - Nested response with status_code=200');
+
+          // After successful import, get updated process
+          final processResult = await getImportOrderProcess(importId);
+          return {
+            'success': true,
+            'data': nestedData['data'] ?? nestedData,
+            'process': processResult['data'],
+          };
+        }
+      }
+
+      // If we get here, it's an error
+      final errorMessage = result['message'] ?? 'Không thể nhập thiết bị';
+      print('DEBUG: Import order item failed - Message: $errorMessage');
+
       return {
         'success': false,
-        'message': result['message'] ?? 'Không thể nhập thiết bị',
+        'message': errorMessage,
       };
     } catch (e) {
       print('DEBUG: Error in importOrderItemFromQr: $e');
@@ -224,7 +250,7 @@ class ImportWarehouseService {
     return importOrderItemFromQr(importId: importId, qrData: qrData);
   }
 
-  /// Process import item (similar to export process)
+  /// Process import item (similar to export process) - FIXED VERSION
   Future<Map<String, dynamic>> processImportItem({
     required String importId,
     required String serialNumber,
@@ -233,6 +259,7 @@ class ImportWarehouseService {
   }) async {
     try {
       print('DEBUG: Processing import item - ImportID: $importId, Serial: $serialNumber');
+
       final result = await _apiClient.post(
         '/import-warehouse/process',
         {
@@ -245,18 +272,39 @@ class ImportWarehouseService {
 
       print('DEBUG: Process import item response: $result');
 
+      // Simplified response handling
       if (result['success'] == true) {
+        print('DEBUG: Process import item success');
         return {
           'success': true,
           'message': 'Xử lý thiết bị nhập kho thành công',
           'data': result['data'],
         };
-      } else {
-        return {
-          'success': false,
-          'message': result['message'] ?? 'Không thể xử lý thiết bị',
-        };
       }
+
+      // Check nested response
+      if (result['data'] is Map) {
+        final nestedData = result['data'] as Map<String, dynamic>;
+        final statusCode = nestedData['status_code'];
+
+        if (statusCode == 200) {
+          print('DEBUG: Process import item success - Nested response');
+          return {
+            'success': true,
+            'message': 'Xử lý thiết bị nhập kho thành công',
+            'data': nestedData['data'] ?? nestedData,
+          };
+        }
+      }
+
+      // Error case
+      final errorMessage = result['message'] ?? 'Không thể xử lý thiết bị';
+      print('DEBUG: Process import item failed: $errorMessage');
+
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
     } catch (e) {
       print('DEBUG: Error in processImportItem: $e');
       return {

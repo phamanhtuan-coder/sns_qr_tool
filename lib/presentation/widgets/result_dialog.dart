@@ -50,28 +50,40 @@ class ResultDialog extends StatefulWidget {
 }
 
 class _ResultDialogState extends State<ResultDialog> {
-  bool _isApiLoading = false;
-  bool _isBluetoothLoading = false;
+  // Local loading states - simplified
+  bool _localApiLoading = false;
+  bool _localBluetoothLoading = false;
 
   bool get isFirmwareMode => widget.currentMode == 'firmware';
   bool get isStockInMode => widget.currentMode == 'stockin';
+  bool get isStockOutMode => widget.currentMode == 'stockout';
 
   @override
   void initState() {
     super.initState();
-    _isApiLoading = widget.isApiLoading;
-    _isBluetoothLoading = widget.isBluetoothLoading;
+    // Initialize local states
+    _localApiLoading = widget.isApiLoading;
+    _localBluetoothLoading = widget.isBluetoothLoading;
+
+    print('DEBUG: ResultDialog init - isApiLoading: ${widget.isApiLoading}, isBluetoothLoading: ${widget.isBluetoothLoading}');
   }
 
   @override
   void didUpdateWidget(ResultDialog oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.isApiLoading != widget.isApiLoading ||
-        oldWidget.isBluetoothLoading != widget.isBluetoothLoading) {
+    // Update local states when widget properties change
+    if (oldWidget.isApiLoading != widget.isApiLoading) {
+      print('DEBUG: ResultDialog - API loading changed from ${oldWidget.isApiLoading} to ${widget.isApiLoading}');
       setState(() {
-        _isApiLoading = widget.isApiLoading;
-        _isBluetoothLoading = widget.isBluetoothLoading;
+        _localApiLoading = widget.isApiLoading;
+      });
+    }
+
+    if (oldWidget.isBluetoothLoading != widget.isBluetoothLoading) {
+      print('DEBUG: ResultDialog - Bluetooth loading changed from ${oldWidget.isBluetoothLoading} to ${widget.isBluetoothLoading}');
+      setState(() {
+        _localBluetoothLoading = widget.isBluetoothLoading;
       });
     }
   }
@@ -81,9 +93,11 @@ class _ResultDialogState extends State<ResultDialog> {
     final isSuccess = widget.type == 'success';
     final formattedDetails = _formatDetails();
     final hasErrors = widget.apiError != null || widget.bluetoothError != null;
-    final isAnyLoading = (_isApiLoading || _isBluetoothLoading) &&
-        !(widget.details['sent_to_desktop'] == 'Thành công' ||
-            (!isFirmwareMode && !_isApiLoading && !_isBluetoothLoading));
+
+    // Simplified loading logic - just check if any loading is active
+    final isAnyLoading = _localApiLoading || _localBluetoothLoading;
+
+    print('DEBUG: ResultDialog build - localApiLoading: $_localApiLoading, localBluetoothLoading: $_localBluetoothLoading, isAnyLoading: $isAnyLoading');
 
     return Stack(
       children: [
@@ -122,6 +136,8 @@ class _ResultDialogState extends State<ResultDialog> {
             ),
           ),
         ),
+
+        // Loading overlay - simplified logic
         if (isAnyLoading)
           Positioned.fill(
             child: Container(
@@ -160,14 +176,16 @@ class _ResultDialogState extends State<ResultDialog> {
   }
 
   String _getLoadingText() {
-    if (_isApiLoading && _isBluetoothLoading) {
+    if (_localApiLoading && _localBluetoothLoading) {
       return 'Đang xử lý...';
-    } else if (_isApiLoading) {
+    } else if (_localApiLoading) {
       if (isStockInMode) {
         return 'Đang nhập kho...';
+      } else if (isStockOutMode) {
+        return 'Đang xuất kho...';
       }
       return 'Đang gửi API...';
-    } else if (_isBluetoothLoading) {
+    } else if (_localBluetoothLoading) {
       return 'Đang kết nối Bluetooth...';
     }
     return 'Đang xử lý...';
@@ -420,7 +438,11 @@ class _ResultDialogState extends State<ResultDialog> {
   Widget _buildActions(BuildContext context, bool isSuccess, List<String> actionsList) {
     final theme = Theme.of(context);
     final hasApiError = widget.apiError != null;
-    final isAnyLoading = _isApiLoading || _isBluetoothLoading;
+
+    // Use local loading state to disable buttons
+    final isAnyLoading = _localApiLoading || _localBluetoothLoading;
+
+    print('DEBUG: Building actions - hasApiError: $hasApiError, isAnyLoading: $isAnyLoading');
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -469,7 +491,7 @@ class _ResultDialogState extends State<ResultDialog> {
                   isLoading: false,
                   loadingText: '',
                   normalText: 'Dashboard',
-                  onPressed: () {
+                  onPressed: isAnyLoading ? null : () {
                     Navigator.of(context).pop();
                     Navigator.of(context).pushNamedAndRemoveUntil(
                       AppRouter.dashboard,
@@ -487,17 +509,44 @@ class _ResultDialogState extends State<ResultDialog> {
             const SizedBox(height: 12),
             _buildLoadingButton(
               context: context,
-              isLoading: _isApiLoading,
-              loadingText: isStockInMode ? 'Đang nhập kho...' : 'Đang xử lý...',
-              normalText: isStockInMode ? 'Nhập kho' : 'Xác nhận',
-              onPressed: hasApiError || isAnyLoading ? null : widget.onSubmit,
+              isLoading: _localApiLoading, // Use local loading state
+              loadingText: _getSubmitLoadingText(),
+              normalText: _getSubmitText(),
+              onPressed: (hasApiError || isAnyLoading) ? null : widget.onSubmit,
               backgroundColor: AppColors.primary,
-              icon: isStockInMode ? Icons.inventory : Icons.check_circle,
+              icon: _getSubmitIcon(),
             ),
           ],
         ],
       ),
     );
+  }
+
+  String _getSubmitLoadingText() {
+    if (isStockInMode) {
+      return 'Đang nhập kho...';
+    } else if (isStockOutMode) {
+      return 'Đang xuất kho...';
+    }
+    return 'Đang xử lý...';
+  }
+
+  String _getSubmitText() {
+    if (isStockInMode) {
+      return 'Nhập kho';
+    } else if (isStockOutMode) {
+      return 'Xuất kho';
+    }
+    return 'Xác nhận';
+  }
+
+  IconData _getSubmitIcon() {
+    if (isStockInMode) {
+      return Icons.inventory;
+    } else if (isStockOutMode) {
+      return Icons.logout;
+    }
+    return Icons.check_circle;
   }
 
   void _copyToClipboard(BuildContext context, MapEntry<String, String> detail) {

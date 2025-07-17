@@ -256,7 +256,8 @@ class _ExportOrderDetailScreenState extends State<ExportOrderDetailScreen> {
   }
 
   Widget _buildProgressBar(StockProgressLoaded state) {
-    final progress = state.scannedCount / state.totalCount;
+    // Ensure we don't divide by zero
+    final progress = state.totalCount > 0 ? state.scannedCount / state.totalCount : 0.0;
     final percentage = (progress * 100).toInt();
 
     return Card(
@@ -288,7 +289,7 @@ class _ExportOrderDetailScreenState extends State<ExportOrderDetailScreen> {
             ),
             const SizedBox(height: 8),
             LinearProgressIndicator(
-              value: progress,
+              value: progress.isNaN ? 0.0 : progress, // Handle NaN case
               backgroundColor: Colors.grey[200],
               valueColor: AlwaysStoppedAnimation<Color>(
                 percentage == 100 ? AppColors.success : AppColors.primary,
@@ -298,7 +299,9 @@ class _ExportOrderDetailScreenState extends State<ExportOrderDetailScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Đã xuất: ${state.scannedCount}/${state.totalCount} sản phẩm',
+              state.totalCount == 0
+                  ? 'Không có sản phẩm nào cần xuất'
+                  : 'Đã xuất: ${state.scannedCount}/${state.totalCount} sản phẩm',
               style: const TextStyle(color: Colors.grey),
             ),
           ],
