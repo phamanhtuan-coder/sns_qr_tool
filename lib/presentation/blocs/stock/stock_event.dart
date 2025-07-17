@@ -92,6 +92,15 @@ class LoadExportOrders extends StockEvent {
   const LoadExportOrders();
 }
 
+class SelectExportOrder extends StockEvent {
+  final String exportId;
+
+  const SelectExportOrder(this.exportId);
+
+  @override
+  List<Object?> get props => [exportId];
+}
+
 class StartExportOrder extends StockEvent {
   final String exportId;
 
@@ -112,19 +121,21 @@ class LoadExportProgress extends StockEvent {
 
 class ProcessExportItem extends StockEvent {
   final String exportId;
+  final String orderId;
   final String serialNumber;
   final String? batchProductionId;
   final String? templateId;
 
   const ProcessExportItem({
     required this.exportId,
+    required this.orderId,
     required this.serialNumber,
     this.batchProductionId,
     this.templateId,
   });
 
   @override
-  List<Object?> get props => [exportId, serialNumber, batchProductionId, templateId];
+  List<Object?> get props => [exportId, orderId, serialNumber, batchProductionId, templateId];
 }
 
 class RefreshDeviceList extends StockEvent {

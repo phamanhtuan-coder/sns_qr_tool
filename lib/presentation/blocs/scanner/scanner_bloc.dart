@@ -20,6 +20,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
   final ExportWarehouseService _exportWarehouseService = getIt<ExportWarehouseService>();
   String _currentFunctionId = '';
   String? _currentOrderId; // Store current import/export order ID
+  String? _currentExportId; // Store current export ID
 
   ScannerBloc() : super(const ScannerInitial()) {
     on<ScanQR>((event, emit) async {
@@ -138,6 +139,11 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
       _currentOrderId = event.orderId;
     });
 
+    on<SetExportId>((event, emit) {
+      _currentExportId = event.exportId;
+      _currentOrderId = event.orderId;
+    });
+
     on<RetryScan>((event, emit) async {
       try {
         await _cameraService.reset();
@@ -218,10 +224,10 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
 
       // Handle stockout
       if (functionId == 'stockout') {
-        if (_currentOrderId == null) {
+        if (_currentExportId == null || _currentOrderId == null) {
           emit(ScannerFailure(error: {
             'title': 'Lỗi dữ liệu',
-            'message': 'Không tìm thấy thông tin đơn xuất.',
+            'message': 'Không tìm thấy thông tin đơn xuất hoặc đơn đặt hàng.',
             'details': {'errorCode': 'DATA-003', 'actions': const ['dashboard']},
           }));
           return;
@@ -229,9 +235,9 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
 
         emit(currentState.copyWith(isApiLoading: true));
 
-        // TODO: Implement export item processing when export service is ready
         final result = await _exportWarehouseService.processExportItem(
-          exportId: _currentOrderId!,
+          exportId: _currentExportId!,
+          orderId: _currentOrderId!,
           serialNumber: qrData.serialNumber,
           batchProductionId: qrData.batchProductionId,
           templateId: qrData.templateId,
@@ -240,7 +246,7 @@ class ScannerBloc extends Bloc<ScannerEvent, ScannerState> {
         if (result['success'] == true) {
           // Trigger refresh of export progress in StockBloc
           final stockBloc = getIt<StockBloc>();
-          stockBloc.add(LoadExportProgress(_currentOrderId!));
+          stockBloc.add(LoadExportProgress(_currentExportId!));
 
           emit(ScannerSuccess(
             result: {

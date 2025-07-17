@@ -1,5 +1,6 @@
 import 'package:smart_net_qr_scanner/data/services/api_client.dart';
 import 'package:smart_net_qr_scanner/data/models/qr_data.dart';
+import 'package:smart_net_qr_scanner/data/models/export_order.dart';
 import 'package:smart_net_qr_scanner/data/services/local_export_storage.dart';
 import 'package:smart_net_qr_scanner/utils/logger.dart';
 
@@ -12,11 +13,21 @@ class ExportWarehouseService {
     try {
       final response = await _apiClient.get('/export-warehouse/invoice-not-finish');
 
-      if (response['success'] == true && response['data'] != null) {
-        return {
-          'success': true,
-          'data': response['data'],
-        };
+      // API returns nested structure: { "status_code": 200, "data": [...] }
+      if (response['success'] == true) {
+        if (response['data'] is Map && response['data'].containsKey('status_code')) {
+          // Nested response structure
+          return {
+            'success': true,
+            'data': response['data'],
+          };
+        } else {
+          // Direct response structure
+          return {
+            'success': true,
+            'data': response['data'],
+          };
+        }
       } else {
         // Handle different response structures
         final statusCode = response['data']?['status_code'];
@@ -25,7 +36,7 @@ class ExportWarehouseService {
         if (statusCode == 200 && data != null) {
           return {
             'success': true,
-            'data': data,
+            'data': response['data'],
           };
         }
 
@@ -43,11 +54,86 @@ class ExportWarehouseService {
     }
   }
 
+  /// Get export order details
+  Future<Map<String, dynamic>> getExportOrderDetail(String exportId) async {
+    try {
+      final response = await _apiClient.get('/export-warehouse/detail/$exportId');
+
+      if (response['success'] == true) {
+        // Extract order data directly from the response
+        final orderData = _extractOrderData(response);
+
+        if (orderData != null) {
+          return {
+            'success': true,
+            'data': orderData,
+          };
+        } else {
+          return {
+            'success': false,
+            'message': 'Không thể đọc thông tin đơn xuất',
+          };
+        }
+      } else {
+        return {
+          'success': false,
+          'message': response['message'] ?? 'Không thể tải chi tiết đơn xuất',
+        };
+      }
+    } catch (e, stackTrace) {
+      logError('Lỗi tải chi tiết đơn xuất', e, stackTrace);
+      return {
+        'success': false,
+        'message': 'Lỗi kết nối: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Helper method to extract order data from various response structures
+  Map<String, dynamic>? _extractOrderData(Map<String, dynamic> response) {
+    try {
+      final data = response['data'];
+
+      // Try different paths to extract the order data
+
+      // Path 1: data.data.data[0]
+      if (data is Map &&
+          data.containsKey('data') &&
+          data['data'] is Map &&
+          data['data'].containsKey('data') &&
+          data['data']['data'] is List &&
+          (data['data']['data'] as List).isNotEmpty) {
+        return Map<String, dynamic>.from((data['data']['data'] as List)[0]);
+      }
+
+      // Path 2: data.data[0]
+      if (data is Map &&
+          data.containsKey('data') &&
+          data['data'] is List &&
+          (data['data'] as List).isNotEmpty) {
+        return Map<String, dynamic>.from((data['data'] as List)[0]);
+      }
+
+      // Path 3: Direct data object with orders field
+      if (data is Map && data.containsKey('orders')) {
+        return Map<String, dynamic>.from(data);
+      }
+
+      return null;
+    } catch (e) {
+      print('DEBUG: Error in _extractOrderData: $e');
+      return null;
+    }
+  }
+
   /// Start a new export order
   Future<Map<String, dynamic>> startExportOrder(String exportId) async {
     try {
+      // Parse exportId to integer since the backend expects an int
+      final parsedId = int.parse(exportId);
+
       final response = await _apiClient.patch('/export-warehouse/start', {
-        'export_id': exportId,
+        'export_id': parsedId, // Send as integer
       });
 
       if (response['success'] == true) {
@@ -76,6 +162,56 @@ class ExportWarehouseService {
       }
     } catch (e, stackTrace) {
       logError('Lỗi bắt đầu đơn xuất', e, stackTrace);
+      return {
+        'success': false,
+        'message': 'Lỗi kết nối: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Export a single product
+  Future<Map<String, dynamic>> exportProduct({
+    required String exportId,
+    required String orderId,
+    required String serialNumber,
+    required String batchProductionId,
+    required String templateId,
+  }) async {
+    try {
+      final response = await _apiClient.patch('/export-warehouse/export-order', {
+        'export_id': exportId,
+        'order_id': orderId,
+        'serial_number': serialNumber,
+        'batch_production_id': batchProductionId,
+        'template_id': templateId,
+      });
+
+      if (response['success'] == true) {
+        return {
+          'success': true,
+          'message': 'Xuất sản phẩm thành công',
+          'data': response['data'],
+        };
+      } else {
+        // Handle different response structures
+        final statusCode = response['data']?['status_code'];
+        final data = response['data']?['data'];
+
+        if (statusCode == 200 && data != null) {
+          return {
+            'success': true,
+            'message': 'Xuất sản phẩm thành công',
+            'data': data,
+          };
+        }
+
+        return {
+          'success': false,
+          'message': response['message'] ?? 'Không thể xuất sản phẩm',
+        };
+      }
+    } catch (e, stackTrace) {
+      logError('Lỗi xuất sản phẩm', e, stackTrace);
       return {
         'success': false,
         'message': 'Lỗi kết nối: ${e.toString()}',
@@ -239,9 +375,9 @@ class ExportWarehouseService {
 
   /// Complete export order with all scanned items
   Future<Map<String, dynamic>> completeExportOrder(
-    String exportId,
-    {String? orderId, List<Map<String, dynamic>>? listProduct}
-  ) async {
+      String exportId,
+      {String? orderId, List<Map<String, dynamic>>? listProduct}
+      ) async {
     try {
       // Get current progress if no list product provided
       if (listProduct == null) {
@@ -276,7 +412,7 @@ class ExportWarehouseService {
           'list_serial': entry.value,
           'quantity': entry.value.length,
         }).toList();
-        
+
         orderId = progress.orderId;
       }
 
@@ -377,21 +513,29 @@ class ExportWarehouseService {
   /// Process an export item
   Future<Map<String, dynamic>> processExportItem({
     required String exportId,
+    required String orderId,
     required String serialNumber,
     String? batchProductionId,
     String? templateId,
   }) async {
     try {
-      final result = await handleScannedDevice(
+      final result = await exportProduct(
         exportId: exportId,
-        orderId: exportId,
-        qrData: QrData(
-          serialNumber: serialNumber,
-          batchProductionId: batchProductionId ?? '',
-          templateId: templateId ?? '',
-        ),
-        expectedQuantities: const {}, // Will be populated from local storage
+        orderId: orderId,
+        serialNumber: serialNumber,
+        batchProductionId: batchProductionId ?? _extractBatchId(serialNumber),
+        templateId: templateId ?? _extractTemplateId(serialNumber),
       );
+
+      if (result['success']) {
+        // Update local progress after successful API call
+        await _localStorage.addScannedItem(
+          exportId,
+          serialNumber,
+          templateId ?? _extractTemplateId(serialNumber),
+          batchProductionId ?? _extractBatchId(serialNumber),
+        );
+      }
 
       return result;
     } catch (e) {

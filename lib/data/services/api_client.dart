@@ -234,7 +234,7 @@ class ApiClient {
     print('🔷🔷🔷🔷🔷🔷🔷🔷 API CALL START 🔷🔷🔷🔷🔷🔷🔷🔷');
     print('📍 Time: ${DateTime.now().toString()}');
     print('🌐 URL: ${_getUrlForEndpoint(endpoint)}$endpoint');
-    print('�� Method: $method');
+    print('🔧 Method: $method');
 
     if (headers != null) {
       print('\n📋 Headers:');

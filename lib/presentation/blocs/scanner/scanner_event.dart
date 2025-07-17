@@ -37,6 +37,16 @@ class SetOrderId extends ScannerEvent {
   List<Object> get props => [orderId];
 }
 
+class SetExportId extends ScannerEvent {
+  final String exportId;
+  final String orderId;
+
+  const SetExportId(this.exportId, this.orderId);
+
+  @override
+  List<Object> get props => [exportId, orderId];
+}
+
 class CallApiOnly extends ScannerEvent {
   final String serialNumber;
   final String functionId;

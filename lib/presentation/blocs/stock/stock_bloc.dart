@@ -26,6 +26,7 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     on<LoadImportOrders>(_onLoadImportOrders);
     on<LoadExportOrders>(_onLoadExportOrders);
     on<SelectImportOrder>(_onSelectImportOrder);
+    on<SelectExportOrder>(_onSelectExportOrder);
     on<StartImportOrder>(_onStartImportOrder);
     on<StartExportOrder>(_onStartExportOrder);
     on<LoadImportProgress>(_onLoadImportProgress);
@@ -213,11 +214,72 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       ) async {
     try {
       emit(const StockLoading());
-      // TODO: Implement export orders loading
-      emit(const StockExportLoaded(exportOrders: []));
+
+      final result = await _exportWarehouseService.getUnfinishedExportOrders();
+
+      if (result['success'] == true) {
+        // Handle nested data structure
+        List<dynamic> ordersData;
+        if (result['data'] is Map && result['data'].containsKey('data')) {
+          // Handle nested structure: { "status_code": 200, "data": [...] }
+          ordersData = result['data']['data'] ?? [];
+        } else {
+          // Handle direct array structure
+          ordersData = result['data'] ?? [];
+        }
+
+        final exportOrders = ordersData.map((data) => ExportOrder.fromJson(data)).toList();
+        emit(StockExportLoaded(exportOrders: exportOrders));
+      } else {
+        emit(StockError(result['message'] ?? 'Không thể tải danh sách đơn xuất'));
+      }
     } catch (e, stackTrace) {
       logError('Error loading export orders', e, stackTrace);
       emit(StockError('Lỗi tải danh sách đơn xuất: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onSelectExportOrder(
+      SelectExportOrder event,
+      Emitter<StockState> emit,
+      ) async {
+    try {
+      if (state is StockExportLoaded) {
+        emit(const StockLoading());
+
+        final result = await _exportWarehouseService.getExportOrderDetail(event.exportId);
+
+        if (result['success'] == true) {
+          // Order data is already extracted by the service
+          final orderData = result['data'];
+
+          // Extract status or default to 0
+          final status = orderData['status'] ?? 0;
+
+          if (status == 0) {
+            emit(StockExportOrderNotStarted(
+              exportId: event.exportId,
+              orderDetails: orderData,
+            ));
+          } else {
+            emit(StockExportOrderStarted(
+              exportId: event.exportId,
+              orderDetails: orderData,
+            ));
+
+            // Also load the progress
+            add(LoadExportProgress(event.exportId));
+          }
+        } else {
+          emit(StockError(result['message'] ?? 'Không thể tải chi tiết đơn xuất'));
+        }
+      } else {
+        emit(StockError('Trạng thái không hợp lệ'));
+      }
+    } catch (e, stackTrace) {
+      print('DEBUG: Exception in _onSelectExportOrder: $e');
+      logError('Error selecting export order', e, stackTrace);
+      emit(StockError('Lỗi chọn đơn xuất: ${e.toString()}'));
     }
   }
 
@@ -231,12 +293,26 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       final result = await _exportWarehouseService.startExportOrder(event.exportId);
 
       if (result['success'] == true) {
-        emit(StockExportOrderStarted(
-          exportId: event.exportId,
-          orderDetails: result['data'] ?? {},
-        ));
+        // Get the export order details again after starting
+        final detailResult = await _exportWarehouseService.getExportOrderDetail(event.exportId);
 
-        add(LoadExportProgress(event.exportId));
+        if (detailResult['success'] == true) {
+          final orderData = detailResult['data']?['data']?[0];
+
+          if (orderData != null) {
+            emit(StockExportOrderStarted(
+              exportId: event.exportId,
+              orderDetails: orderData,
+            ));
+
+            // Also load the progress
+            add(LoadExportProgress(event.exportId));
+          } else {
+            emit(StockError('Không tìm thấy thông tin đơn xuất sau khi bắt đầu'));
+          }
+        } else {
+          emit(StockError(detailResult['message'] ?? 'Không thể tải chi tiết đơn xuất sau khi bắt đầu'));
+        }
       } else {
         emit(StockError(result['message'] ?? 'Không thể bắt đầu đơn xuất'));
       }
@@ -251,25 +327,87 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       Emitter<StockState> emit,
       ) async {
     try {
-      final result = await _exportWarehouseService.getExportProgress(event.exportId);
+      // For a new approach, let's use the order details we already have
+      if (state is StockExportOrderStarted) {
+        final currentState = state as StockExportOrderStarted;
+        final orderDetails = currentState.orderDetails;
 
-      if (result['success'] == true) {
-        final data = result['data'];
-        final scannedCount = data['scanned_count'] ?? 0;
-        final totalCount = data['total_count'] ?? 0;
-        final canComplete = data['can_complete'] ?? false;
+        // Extract orders and products from the already loaded data
+        final orders = orderDetails['orders'] as List<dynamic>? ?? [];
+
+        // Count total and scanned items
+        int totalCount = 0;
+        int scannedCount = 0;
+
+        for (final order in orders) {
+          final products = order['products'] as List<dynamic>? ?? [];
+
+          for (final product in products) {
+            final quantity = product['quantity'] as int? ?? 0;
+            totalCount += quantity;
+
+            final serials = product['serials'] as List<dynamic>? ?? [];
+            scannedCount += serials.length;
+          }
+        }
+
+        // Can complete if all items are scanned
+        final canComplete = scannedCount >= totalCount;
 
         emit(StockProgressLoaded(
           orderId: event.exportId,
-          progressData: data,
+          progressData: orderDetails,
           scannedCount: scannedCount,
           totalCount: totalCount,
           canComplete: canComplete,
         ));
+        return;
+      }
+
+      // Original approach as fallback - get details from API
+      final result = await _exportWarehouseService.getExportOrderDetail(event.exportId);
+
+      if (result['success'] == true) {
+        final orderData = result['data'];
+
+        if (orderData != null && orderData.containsKey('orders')) {
+          // Extract orders and products
+          final orders = orderData['orders'] as List<dynamic>? ?? [];
+
+          // Count total and scanned items
+          int totalCount = 0;
+          int scannedCount = 0;
+
+          for (final order in orders) {
+            final products = order['products'] as List<dynamic>? ?? [];
+
+            for (final product in products) {
+              final quantity = product['quantity'] as int? ?? 0;
+              totalCount += quantity;
+
+              final serials = product['serials'] as List<dynamic>? ?? [];
+              scannedCount += serials.length;
+            }
+          }
+
+          // Can complete if all items are scanned
+          final canComplete = scannedCount >= totalCount;
+
+          emit(StockProgressLoaded(
+            orderId: event.exportId,
+            progressData: orderData,
+            scannedCount: scannedCount,
+            totalCount: totalCount,
+            canComplete: canComplete,
+          ));
+        } else {
+          emit(StockError('Không tìm thấy thông tin đơn đặt hàng'));
+        }
       } else {
         emit(StockError(result['message'] ?? 'Không thể tải tiến độ xuất'));
       }
     } catch (e, stackTrace) {
+      print('DEBUG: Error in _onLoadExportProgress: $e');
       logError('Error loading export progress', e, stackTrace);
       emit(StockError('Lỗi tải tiến độ xuất: ${e.toString()}'));
     }
@@ -282,6 +420,7 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     try {
       final result = await _exportWarehouseService.processExportItem(
         exportId: event.exportId,
+        orderId: event.orderId,
         serialNumber: event.serialNumber,
         batchProductionId: event.batchProductionId,
         templateId: event.templateId,
@@ -295,6 +434,7 @@ class StockBloc extends Bloc<StockEvent, StockState> {
           progress: result['data']?['progress'] ?? {},
         ));
 
+        // Reload export progress to update the UI
         add(LoadExportProgress(event.exportId));
       } else {
         emit(StockError(result['message'] ?? 'Không thể xử lý thiết bị'));
@@ -317,6 +457,9 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       } else if (state is StockExportOrderStarted) {
         final currentState = state as StockExportOrderStarted;
         await _onLoadExportProgress(LoadExportProgress(currentState.exportId), emit);
+      } else if (state is StockProgressLoaded) {
+        final currentState = state as StockProgressLoaded;
+        await _onLoadExportProgress(LoadExportProgress(currentState.orderId), emit);
       }
     } catch (e) {
       emit(StockError('Không thể làm mới danh sách thiết bị: ${e.toString()}'));

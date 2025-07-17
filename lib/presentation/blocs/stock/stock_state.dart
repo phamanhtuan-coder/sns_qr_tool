@@ -127,6 +127,19 @@ class StockExportLoaded extends StockState {
   ];
 }
 
+class StockExportOrderNotStarted extends StockState {
+  final String exportId;
+  final Map<String, dynamic> orderDetails;
+
+  const StockExportOrderNotStarted({
+    required this.exportId,
+    required this.orderDetails,
+  });
+
+  @override
+  List<Object?> get props => [exportId, orderDetails];
+}
+
 class StockExportOrderStarted extends StockState {
   final String exportId;
   final Map<String, dynamic> orderDetails;
