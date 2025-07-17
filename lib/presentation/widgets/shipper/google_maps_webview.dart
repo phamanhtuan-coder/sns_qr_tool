@@ -108,6 +108,9 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
         ? '${widget.currentLocation!.latitude}, ${widget.currentLocation!.longitude}'
         : '21.028511, 105.804817'; // Default to Hanoi
 
+    // Note: You need to replace this API key with a valid one that has Maps JavaScript API enabled
+    const apiKey = 'YOUR_GOOGLE_MAPS_API_KEY'; // Replace with your actual API key
+
     final htmlString = '''
 <!DOCTYPE html>
 <html>
@@ -158,6 +161,29 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
         .status-inTransit { background-color: #FFF3E0; color: #F57C00; }
         .status-delivered { background-color: #E8F5E8; color: #388E3C; }
         .status-failed { background-color: #FFEBEE; color: #D32F2F; }
+        .error-message {
+            padding: 20px;
+            text-align: center;
+            color: #d32f2f;
+            background-color: #ffebee;
+            border-radius: 8px;
+            margin: 20px;
+        }
+        .fallback-map {
+            height: 100vh;
+            width: 100vw;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+        }
+        .fallback-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
     </style>
 </head>
 <body>
@@ -167,44 +193,66 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
         let map;
         let markers = [];
         let currentLocationMarker;
+        let mapInitialized = false;
         
         function initMap() {
-            map = new google.maps.Map(document.getElementById("map"), {
-                zoom: 13,
-                center: { lat: ${center.split(',')[0]}, lng: ${center.split(',')[1]} },
-                mapTypeControl: true,
-                streetViewControl: true,
-                fullscreenControl: false,
-                styles: [
-                    {
-                        featureType: "poi",
-                        elementType: "labels",
-                        stylers: [{ visibility: "off" }]
+            try {
+                map = new google.maps.Map(document.getElementById("map"), {
+                    zoom: 13,
+                    center: { lat: ${center.split(',')[0]}, lng: ${center.split(',')[1]} },
+                    mapTypeControl: true,
+                    streetViewControl: true,
+                    fullscreenControl: false,
+                    styles: [
+                        {
+                            featureType: "poi",
+                            elementType: "labels",
+                            stylers: [{ visibility: "off" }]
+                        }
+                    ]
+                });
+                
+                mapInitialized = true;
+                
+                // Add current location marker if available
+                ${widget.currentLocation != null ? '''
+                currentLocationMarker = new google.maps.Marker({
+                    position: { lat: ${widget.currentLocation!.latitude}, lng: ${widget.currentLocation!.longitude} },
+                    map: map,
+                    title: "Vị trí hiện tại",
+                    icon: {
+                        url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(getCurrentLocationIcon()),
+                        scaledSize: new google.maps.Size(30, 30),
+                        anchor: new google.maps.Point(15, 15)
                     }
-                ]
-            });
-            
-            // Add current location marker if available
-            ${widget.currentLocation != null ? '''
-            currentLocationMarker = new google.maps.Marker({
-                position: { lat: ${widget.currentLocation!.latitude}, lng: ${widget.currentLocation!.longitude} },
-                map: map,
-                title: "Vị trí hiện tại",
-                icon: {
-                    url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(getCurrentLocationIcon()),
-                    scaledSize: new google.maps.Size(30, 30),
-                    anchor: new google.maps.Point(15, 15)
-                }
-            });
-            
-            const currentInfoWindow = new google.maps.InfoWindow({
-                content: '<div class="info-window"><div class="info-title">📍 Vị trí hiện tại</div></div>'
-            });
-            
-            currentLocationMarker.addListener("click", () => {
-                currentInfoWindow.open(map, currentLocationMarker);
-            });
-            ''' : ''}
+                });
+                
+                const currentInfoWindow = new google.maps.InfoWindow({
+                    content: '<div class="info-window"><div class="info-title">📍 Vị trí hiện tại</div></div>'
+                });
+                
+                currentLocationMarker.addListener("click", () => {
+                    currentInfoWindow.open(map, currentLocationMarker);
+                });
+                ''' : ''}
+            } catch (error) {
+                console.error('Error initializing map:', error);
+                showFallbackMap();
+            }
+        }
+        
+        function showFallbackMap() {
+            const mapDiv = document.getElementById("map");
+            mapDiv.innerHTML = \`
+                <div class="fallback-map">
+                    <div class="fallback-icon">🗺️</div>
+                    <h2>Bản đồ không khả dụng</h2>
+                    <p>Không thể tải Google Maps</p>
+                    <p style="margin-top: 16px; font-size: 14px;">
+                        Vui lòng kiểm tra kết nối mạng hoặc sử dụng ứng dụng bản đồ khác
+                    </p>
+                </div>
+            \`;
         }
         
         function getCurrentLocationIcon() {
@@ -226,6 +274,11 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
         }
         
         function addDeliveryMarkers(orders) {
+            if (!mapInitialized) {
+                console.log('Map not initialized, cannot add markers');
+                return;
+            }
+            
             // Clear existing markers
             markers.forEach(marker => marker.setMap(null));
             markers = [];
@@ -279,7 +332,7 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
             });
             
             // Adjust map bounds to show all markers
-            if (markers.length > 0) {
+            if (markers.length > 0 && mapInitialized) {
                 const bounds = new google.maps.LatLngBounds();
                 markers.forEach(marker => bounds.extend(marker.getPosition()));
                 if (currentLocationMarker) {
@@ -296,6 +349,8 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
         }
         
         function focusOnOrder(orderId) {
+            if (!mapInitialized) return;
+            
             const order = orders.find(o => o.id === orderId);
             if (order && order.latitude && order.longitude) {
                 map.setCenter({ lat: order.latitude, lng: order.longitude });
@@ -304,18 +359,33 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
         }
         
         function getCurrentLocation() {
-            if (currentLocationMarker) {
-                map.setCenter(currentLocationMarker.getPosition());
-                map.setZoom(16);
-            }
+            if (!mapInitialized || !currentLocationMarker) return;
+            
+            map.setCenter(currentLocationMarker.getPosition());
+            map.setZoom(16);
         }
         
         // Global variable to store orders
         let orders = [];
+        
+        // Handle Google Maps API errors
+        window.gm_authFailure = function() {
+            console.error('Google Maps API authentication failed');
+            showFallbackMap();
+        };
+        
+        // Set a timeout for map initialization
+        setTimeout(function() {
+            if (!mapInitialized) {
+                console.log('Map initialization timeout, showing fallback');
+                showFallbackMap();
+            }
+        }, 10000); // 10 second timeout
     </script>
     
     <script async defer
-        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBOti4mM-6x9WDnZIjIeyEU21OpBXqWBgw&callback=initMap">
+        src="https://maps.googleapis.com/maps/api/js?key=$apiKey&callback=initMap&loading=async"
+        onerror="showFallbackMap()">
     </script>
 </body>
 </html>
@@ -636,3 +706,4 @@ class _GoogleMapsWebViewState extends State<GoogleMapsWebView> {
     }
   }
 }
+

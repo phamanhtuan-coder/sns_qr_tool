@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/delivery/delivery_bloc.dart';
-import 'package:smart_net_qr_scanner/presentation/widgets/shipper/google_maps_webview.dart';
+import 'package:smart_net_qr_scanner/presentation/widgets/shipper/simple_map_widget.dart';
 import 'package:smart_net_qr_scanner/data/models/delivery_order.dart';
 import 'package:smart_net_qr_scanner/utils/app_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -124,6 +124,81 @@ class MapViewWidget extends StatelessWidget {
     );
   }
 
+  Future<void> _openGoogleMaps(double latitude, double longitude) async {
+    try {
+      // Try different URL formats for better compatibility
+      final List<String> urls = [
+        'google.navigation:q=$latitude,$longitude', // Google Maps app navigation
+        'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude', // Browser with directions
+        'https://maps.google.com/?q=$latitude,$longitude', // Simple maps URL
+        'geo:$latitude,$longitude', // Generic geo intent
+      ];
+
+      bool launched = false;
+
+      for (String url in urls) {
+        try {
+          final uri = Uri.parse(url);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+            launched = true;
+            break;
+          }
+        } catch (e) {
+          print('Failed to launch URL: $url, Error: $e');
+          continue;
+        }
+      }
+
+      if (!launched) {
+        throw Exception('Không thể mở ứng dụng bản đồ');
+      }
+    } catch (e) {
+      print('Error opening Google Maps: $e');
+      throw Exception('Lỗi mở Google Maps: $e');
+    }
+  }
+
+  Future<void> _shareLocation(BuildContext context) async {
+    if (currentLocation != null) {
+      try {
+        final position = currentLocation!;
+        final url = 'https://maps.google.com/?q=${position.latitude},${position.longitude}';
+
+        // Try to open in browser first
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          // Fallback: show in snackbar
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Vị trí: $url'),
+                duration: const Duration(seconds: 5),
+                action: SnackBarAction(
+                  label: 'Sao chép',
+                  onPressed: () {
+                    // Copy to clipboard functionality would go here
+                  },
+                ),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Lỗi chia sẻ vị trí: $e'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -132,9 +207,9 @@ class MapViewWidget extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // Google Maps WebView
+          // Simple Map Widget (no API key required)
           Expanded(
-            child: GoogleMapsWebView(
+            child: SimpleMapWidget(
               currentLocation: currentLocation,
               deliveryOrders: deliveryOrders,
               selectedOrder: selectedOrder,
@@ -213,10 +288,18 @@ class MapViewWidget extends StatelessWidget {
             children: [
               IconButton(
                 onPressed: () async {
-                  final position = currentLocation!;
-                  final url = 'https://www.google.com/maps/@${position.latitude},${position.longitude},15z';
-                  if (await canLaunchUrl(Uri.parse(url))) {
-                    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                  try {
+                    final position = currentLocation!;
+                    await _openGoogleMaps(position.latitude, position.longitude);
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('$e'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
                   }
                 },
                 icon: Icon(
@@ -287,28 +370,6 @@ class MapViewWidget extends StatelessWidget {
     );
   }
 
-  void _shareLocation(BuildContext context) async {
-    if (currentLocation != null) {
-      final position = currentLocation!;
-      final url = 'https://www.google.com/maps/@${position.latitude},${position.longitude},15z';
-
-      // For now, just copy to clipboard - you could integrate with share_plus package
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Vị trí: $url'),
-          action: SnackBarAction(
-            label: 'Mở',
-            onPressed: () async {
-              if (await canLaunchUrl(Uri.parse(url))) {
-                await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-              }
-            },
-          ),
-        ),
-      );
-    }
-  }
-
   void _showOrderQuickActions(BuildContext context, DeliveryOrder order) {
     showModalBottomSheet(
       context: context,
@@ -371,7 +432,7 @@ class MapViewWidget extends StatelessWidget {
                   child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      _makePhoneCall(order.customerPhone);
+                      _makePhoneCall(context, order.customerPhone);
                     },
                     icon: const Icon(Icons.phone, size: 18),
                     label: const Text('Gọi'),
@@ -382,10 +443,27 @@ class MapViewWidget extends StatelessWidget {
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       Navigator.pop(context);
-                      if (order.latitude != null && order.longitude != null) {
-                        final url = 'https://www.google.com/maps/dir/?api=1&destination=${order.latitude},${order.longitude}';
-                        if (await canLaunchUrl(Uri.parse(url))) {
-                          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                      try {
+                        if (order.latitude != null && order.longitude != null) {
+                          await _openGoogleMaps(order.latitude!, order.longitude!);
+                        } else {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Không có thông tin tọa độ cho đơn hàng này'),
+                                backgroundColor: AppColors.warning,
+                              ),
+                            );
+                          }
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('$e'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
                         }
                       }
                     },
@@ -404,10 +482,32 @@ class MapViewWidget extends StatelessWidget {
     );
   }
 
-  Future<void> _makePhoneCall(String phoneNumber) async {
-    final url = 'tel:$phoneNumber';
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url));
+  Future<void> _makePhoneCall(BuildContext context, String phoneNumber) async {
+    try {
+      final url = 'tel:$phoneNumber';
+      final uri = Uri.parse(url);
+
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Không thể thực hiện cuộc gọi'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi thực hiện cuộc gọi: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 }
