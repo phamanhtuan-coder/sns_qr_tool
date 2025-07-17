@@ -25,6 +25,7 @@ class _ShipperScreenState extends State<ShipperScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
   StreamSubscription<Position>? _locationSubscription;
+  DeliveryBloc? _deliveryBloc; // Store reference to avoid context issues
 
   @override
   void initState() {
@@ -37,10 +38,10 @@ class _ShipperScreenState extends State<ShipperScreen>
     // Load delivery orders when screen initializes
     print('DEBUG: ShipperScreen.initState() - About to call LoadDeliveryOrders');
     try {
-      final deliveryBloc = context.read<DeliveryBloc>();
-      print('DEBUG: ShipperScreen.initState() - DeliveryBloc obtained: $deliveryBloc');
+      _deliveryBloc = context.read<DeliveryBloc>();
+      print('DEBUG: ShipperScreen.initState() - DeliveryBloc obtained: $_deliveryBloc');
 
-      deliveryBloc.add(const LoadDeliveryOrders());
+      _deliveryBloc!.add(const LoadDeliveryOrders());
       print('DEBUG: ShipperScreen.initState() - LoadDeliveryOrders event added');
     } catch (e, stackTrace) {
       print('DEBUG: ShipperScreen.initState() - Error calling LoadDeliveryOrders: $e');
@@ -54,8 +55,12 @@ class _ShipperScreenState extends State<ShipperScreen>
 
   @override
   void dispose() {
+    print('DEBUG: ShipperScreen.dispose() - Starting disposal');
     _locationSubscription?.cancel();
+    _locationSubscription = null;
     _tabController.dispose();
+    _deliveryBloc = null; // Clear reference
+    print('DEBUG: ShipperScreen.dispose() - Disposal complete');
     super.dispose();
   }
 
@@ -86,9 +91,9 @@ class _ShipperScreenState extends State<ShipperScreen>
           distanceFilter: 10,
         ),
       ).listen((Position position) {
-        // Check if widget is still mounted before accessing context
-        if (mounted) {
-          context.read<DeliveryBloc>().add(UpdateLocation(position));
+        // Check if widget is still mounted and bloc is available before accessing context
+        if (mounted && _deliveryBloc != null) {
+          _deliveryBloc!.add(UpdateLocation(position));
         }
       });
     } catch (e) {

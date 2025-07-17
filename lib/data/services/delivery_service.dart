@@ -28,18 +28,27 @@ class DeliveryService {
       print('DEBUG: DeliveryService.getAssignedOrders() - API Response: $result');
 
       // Xử lý response format mới từ API
-      if ((result['status_code'] == 200 || result['success'] == true) && result['data'] != null) {
-        final dataSection = result['data'];
+      // Structure: {success: true, data: {status_code: 200, data: {data: [...], total_page: 1, shipperStats: {...}}}}
+      if (result['success'] == true && result['data'] != null) {
+        final outerData = result['data'];
+        print('DEBUG: DeliveryService.getAssignedOrders() - Outer data: $outerData');
 
-        // Kiểm tra nếu data section có 'data' field
-        if (dataSection is Map<String, dynamic> && dataSection['data'] != null) {
-          final nestedData = dataSection['data']; // This is the nested data object
+        if (outerData is Map<String, dynamic> &&
+            outerData['status_code'] == 200 &&
+            outerData['data'] != null) {
+          final innerData = outerData['data'];
+          print('DEBUG: DeliveryService.getAssignedOrders() - Inner data: $innerData');
 
-          // Check if nested data has 'data' field containing the actual orders
-          if (nestedData is Map<String, dynamic> && nestedData['data'] != null) {
-            final ordersData = nestedData['data']; // This is the actual orders array
+          if (innerData is Map<String, dynamic> && innerData['data'] != null) {
+            final ordersData = innerData['data'];
+            print('DEBUG: DeliveryService.getAssignedOrders() - Orders data type: ${ordersData.runtimeType}');
 
-            // Xử lý trường hợp data là empty list hoặc null
+            // Xử lý trường hợp data là null hoặc empty list
+            if (ordersData == null) {
+              print('DEBUG: DeliveryService.getAssignedOrders() - Orders data is null, returning empty list');
+              return [];
+            }
+
             if (ordersData is List) {
               print('DEBUG: DeliveryService.getAssignedOrders() - Found ${ordersData.length} orders');
 
@@ -52,29 +61,20 @@ class DeliveryService {
               print('DEBUG: DeliveryService.getAssignedOrders() - Successfully mapped ${mappedOrders.length} orders');
               return mappedOrders;
             } else {
-              print('DEBUG: DeliveryService.getAssignedOrders() - Orders data is not a list: $ordersData');
+              print('DEBUG: DeliveryService.getAssignedOrders() - Orders data is not a list: ${ordersData.runtimeType}');
               return [];
             }
+          } else {
+            print('DEBUG: DeliveryService.getAssignedOrders() - Inner data is not a Map or data field is null');
+            return [];
           }
-
-          // Fallback: Try direct access to dataSection['data'] as array (old format)
-          else if (dataSection['data'] is List) {
-            final ordersData = dataSection['data'] as List;
-            print('DEBUG: DeliveryService.getAssignedOrders() - Found ${ordersData.length} orders (fallback)');
-
-            if (ordersData.isEmpty) {
-              print('DEBUG: DeliveryService.getAssignedOrders() - Empty orders list, returning empty');
-              return [];
-            }
-
-            final mappedOrders = ordersData.map((orderJson) => _mapOrderFromApi(orderJson)).toList();
-            print('DEBUG: DeliveryService.getAssignedOrders() - Successfully mapped ${mappedOrders.length} orders (fallback)');
-            return mappedOrders;
-          }
+        } else {
+          print('DEBUG: DeliveryService.getAssignedOrders() - Outer data is not a Map or status_code != 200');
+          return [];
         }
       }
 
-      print('DEBUG: DeliveryService.getAssignedOrders() - No valid data found, returning empty list');
+      print('DEBUG: DeliveryService.getAssignedOrders() - No valid data found or success != true, returning empty list');
       return [];
     } catch (e, stackTrace) {
       print('DEBUG: DeliveryService.getAssignedOrders() - Error: $e');

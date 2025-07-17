@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:smart_net_qr_scanner/data/models/delivery_order.dart';
 import 'package:smart_net_qr_scanner/presentation/blocs/delivery/delivery_bloc.dart';
@@ -131,16 +130,19 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
 
     return AlertDialog(
       backgroundColor: isDark ? AppColors.darkCardBackground : AppColors.cardBackground,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      contentPadding: const EdgeInsets.all(0),
       title: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.1),
+              color: AppColors.success.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
@@ -150,39 +152,50 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
             ),
           ),
           const SizedBox(width: 12),
-          Text(
-            'Xác nhận giao hàng',
-            style: TextStyle(
-              color: isDark ? AppColors.darkTextPrimary : AppColors.text,
+          Expanded(
+            child: Text(
+              'Xác nhận giao hàng',
+              style: TextStyle(
+                color: isDark ? AppColors.darkTextPrimary : AppColors.text,
+              ),
             ),
           ),
         ],
       ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Đơn hàng: ${widget.order.id}',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: isDark ? AppColors.darkTextPrimary : AppColors.text,
-              ),
+      content: SizedBox(
+        width: screenWidth > 600 ? 500 : screenWidth * 0.9,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: screenHeight * 0.7,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Đơn hàng: ${widget.order.id}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.text,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Photo capture section
+                _buildPhotoCaptureSection(isDark),
+                const SizedBox(height: 16),
+
+                // Delivery status selection (simplified for now - API only supports success)
+                _buildStatusSelection(isDark),
+                const SizedBox(height: 16),
+
+                // Note input
+                _buildNoteInput(isDark),
+              ],
             ),
-            const SizedBox(height: 16),
-
-            // Photo capture section
-            _buildPhotoCaptureSection(isDark),
-            const SizedBox(height: 16),
-
-            // Delivery status selection (simplified for now - API only supports success)
-            _buildStatusSelection(isDark),
-            const SizedBox(height: 16),
-
-            // Note input
-            _buildNoteInput(isDark),
-          ],
+          ),
         ),
       ),
       actions: [
@@ -216,7 +229,6 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
     );
   }
 
-  // ... rest of the build methods remain the same
   Widget _buildPhotoCaptureSection(bool isDark) {
     return Container(
       width: double.infinity,
@@ -231,18 +243,43 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
       child: Column(
         children: [
           if (photoPath != null) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.file(
-                File(photoPath!),
-                height: 150,
-                width: double.infinity,
-                fit: BoxFit.cover,
+            Container(
+              height: 150,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(
+                  File(photoPath!),
+                  height: 150,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 150,
+                      width: double.infinity,
+                      color: Colors.grey[200],
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error, color: Colors.red, size: 32),
+                            SizedBox(height: 8),
+                            Text('Lỗi hiển thị ảnh'),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            Wrap(
+              spacing: 8,
               children: [
                 TextButton.icon(
                   onPressed: () async {
@@ -256,7 +293,7 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
                   style: TextButton.styleFrom(
                     foregroundColor: isDark ? AppColors.darkIconPrimary : AppColors.iconPrimary,
                   ),
-                  icon: const Icon(Icons.refresh),
+                  icon: const Icon(Icons.refresh, size: 16),
                   label: const Text('Chụp lại'),
                 ),
                 TextButton.icon(
@@ -268,7 +305,7 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.error,
                   ),
-                  icon: const Icon(Icons.delete),
+                  icon: const Icon(Icons.delete, size: 16),
                   label: const Text('Xóa ảnh'),
                 ),
               ],
@@ -297,8 +334,10 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
               children: [
                 ElevatedButton.icon(
                   onPressed: () async {
@@ -312,6 +351,7 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: AppColors.textOnPrimary,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
                   icon: const Icon(Icons.camera_alt, size: 18),
                   label: const Text('Chụp ảnh'),
@@ -330,6 +370,7 @@ class _DeliveryCompletionDialogState extends State<DeliveryCompletionDialog> {
                     side: BorderSide(
                       color: isDark ? AppColors.darkIconPrimary : AppColors.iconPrimary,
                     ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
                   icon: const Icon(Icons.photo_library, size: 18),
                   label: const Text('Thư viện'),
