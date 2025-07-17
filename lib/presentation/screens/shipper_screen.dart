@@ -27,12 +27,26 @@ class _ShipperScreenState extends State<ShipperScreen>
   @override
   void initState() {
     super.initState();
+    print('DEBUG: ShipperScreen.initState() - Starting initialization');
+
     _tabController = TabController(length: 4, vsync: this);
+    print('DEBUG: ShipperScreen.initState() - TabController created');
 
     // Load delivery orders when screen initializes
-    context.read<DeliveryBloc>().add(const LoadDeliveryOrders());
+    print('DEBUG: ShipperScreen.initState() - About to call LoadDeliveryOrders');
+    try {
+      final deliveryBloc = context.read<DeliveryBloc>();
+      print('DEBUG: ShipperScreen.initState() - DeliveryBloc obtained: $deliveryBloc');
+
+      deliveryBloc.add(const LoadDeliveryOrders());
+      print('DEBUG: ShipperScreen.initState() - LoadDeliveryOrders event added');
+    } catch (e, stackTrace) {
+      print('DEBUG: ShipperScreen.initState() - Error calling LoadDeliveryOrders: $e');
+      print('DEBUG: ShipperScreen.initState() - Stack trace: $stackTrace');
+    }
 
     // Start location tracking
+    print('DEBUG: ShipperScreen.initState() - Starting location tracking');
     _startLocationTracking();
   }
 

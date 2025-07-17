@@ -190,16 +190,29 @@ class AppRouter {
         );
 
       case shipper:
-        return _buildPageRoute(
-          settings,
-          BlocProvider(
-            create: (context) => DeliveryBloc(
-              getIt<DeliveryService>(),
+        print('DEBUG: AppRouter - Creating shipper route');
+        try {
+          final deliveryService = getIt<DeliveryService>();
+          print('DEBUG: AppRouter - DeliveryService obtained: $deliveryService');
+
+          return _buildPageRoute(
+            settings,
+            BlocProvider(
+              create: (context) {
+                print('DEBUG: AppRouter - Creating DeliveryBloc with service: $deliveryService');
+                final bloc = DeliveryBloc(deliveryService);
+                print('DEBUG: AppRouter - DeliveryBloc created: $bloc');
+                return bloc;
+              },
+              child: const ShipperScreen(),
             ),
-            child: const ShipperScreen(),
-          ),
-          maintainState: true,
-        );
+            maintainState: true,
+          );
+        } catch (e, stackTrace) {
+          print('DEBUG: AppRouter - Error creating shipper route: $e');
+          print('DEBUG: AppRouter - Stack trace: $stackTrace');
+          rethrow;
+        }
 
       default:
         return _buildPageRoute(

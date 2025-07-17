@@ -26,16 +26,16 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
   bool _isDeviceSupported = false;
   bool _isScanning = true;
   bool _isSubmitting = false;
-  bool _isProcessingQR = false; // Thêm flag để tránh xử lý nhiều QR cùng lúc
-  String? _lastScannedCode; // Lưu mã QR vừa quét để tránh quét lại
-  Timer? _scanCooldownTimer; // Timer để delay giữa các lần quét
+  bool _isProcessingQR = false;
+  String? _lastScannedCode;
+  Timer? _scanCooldownTimer;
   final MobileScannerController _controller = MobileScannerController();
   late final ScannerBloc _scannerBloc;
   late final CameraService _cameraService;
   StreamSubscription<String>? _cameraErrorSubscription;
   Timer? _scanTimeoutTimer;
 
-  // Animation controllers cho success animation
+  // Animation controllers
   late AnimationController _successAnimationController;
   late AnimationController _pulseAnimationController;
   late Animation<double> _successScaleAnimation;
@@ -44,8 +44,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
   bool _showSuccessAnimation = false;
 
   // Scanning delay constants
-  static const Duration _scanCooldown = Duration(milliseconds: 800); // Delay giữa các lần quét
-  static const Duration _processingDelay = Duration(milliseconds: 300); // Delay trước khi xử lý QR
+  static const Duration _scanCooldown = Duration(milliseconds: 800);
+  static const Duration _processingDelay = Duration(milliseconds: 300);
 
   @override
   void initState() {
@@ -57,9 +57,14 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       final orderId = args?['order_id'] as String?;
+      final exportId = args?['export_id'] as String?;
 
       if (orderId != null) {
-        _scannerBloc.add(SetOrderId(orderId));
+        if (exportId != null) {
+          _scannerBloc.add(SetExportId(exportId, orderId));
+        } else {
+          _scannerBloc.add(SetOrderId(orderId));
+        }
       }
     });
 
@@ -70,7 +75,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
   }
 
   void _setupAnimations() {
-    // Success animation - xuất hiện nhanh và biến mất từ từ
     _successAnimationController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -92,7 +96,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
       curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
     ));
 
-    // Pulse animation cho hiệu ứng liên tục
     _pulseAnimationController = AnimationController(
       duration: const Duration(milliseconds: 1000),
       vsync: this,
@@ -134,19 +137,17 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
     print("DEBUG: Attempting camera restart for retry");
 
     if (mounted) {
-      // Reset scanning states
       setState(() {
         _isScanning = true;
         _isProcessingQR = false;
         _showSuccessAnimation = false;
         _lastScannedCode = null;
+        _isSubmitting = false; // Reset submitting state
       });
 
-      // Reset animations
       _successAnimationController.reset();
       _pulseAnimationController.stop();
 
-      // Cancel existing timers
       _scanTimeoutTimer?.cancel();
       _scanCooldownTimer?.cancel();
 
@@ -191,14 +192,10 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
   }
 
   void _startScanTimeout() {
-    // Cancel existing timer if any
     _scanTimeoutTimer?.cancel();
-
-    // Set a longer timeout (45 seconds)
     _scanTimeoutTimer = Timer(const Duration(seconds: 45), () {
       if (mounted && _isScanning) {
         setState(() => _isScanning = false);
-        // Don't stop the camera, just stop the scanning process
         _scannerBloc.add(ScanQR(widget.purpose, '', error: const {
           'title': 'Hết thời gian quét',
           'message': 'Không tìm thấy mã QR trong 45 giây. Vui lòng thử lại.',
@@ -228,29 +225,22 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
   void _safePop() {
     print("DEBUG: _safePop called - navigating back to dashboard");
 
-    // Cancel any active timers
     _scanTimeoutTimer?.cancel();
     _scanCooldownTimer?.cancel();
 
-    // Stop animations
     _successAnimationController.dispose();
     _pulseAnimationController.dispose();
 
-    // Make sure controller is stopped on navigation
     _controller.stop();
 
-    // Reset scanner state before navigation
     _scannerBloc.add(ResetScanner());
 
-    // First call the onBack callback to reset DashboardBloc state
     widget.onBack();
-
-    // Now pop the navigation stack to go back to the dashboard
     Navigator.of(context).pop();
   }
 
   void _handleDetection(BarcodeCapture capture) {
-    if (!_isScanning || _isProcessingQR) return; // Ignore detections when not in scanning mode or processing
+    if (!_isScanning || _isProcessingQR) return;
 
     final barcode = capture.barcodes.firstOrNull;
 
@@ -275,13 +265,11 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
 
     final scannedCode = barcode.rawValue!;
 
-    // Kiểm tra xem có phải mã QR giống với lần quét trước không
     if (_lastScannedCode == scannedCode) {
       print("DEBUG: Duplicate QR code detected, ignoring: $scannedCode");
       return;
     }
 
-    // Kiểm tra cooldown timer
     if (_scanCooldownTimer?.isActive == true) {
       print("DEBUG: Scan cooldown active, ignoring detection");
       return;
@@ -289,28 +277,18 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
 
     print("DEBUG: QR code detected: $scannedCode");
 
-    // Set processing flag và lưu mã QR
     setState(() {
       _isProcessingQR = true;
       _lastScannedCode = scannedCode;
     });
 
-    // Hiển thị success animation
     _showSuccessDetection();
 
-    // Delay trước khi xử lý QR để cho người dùng thấy animation
     Timer(_processingDelay, () {
       if (mounted) {
-        // Cancel timeout timer since we detected a valid QR code
         _scanTimeoutTimer?.cancel();
-
-        // Stop scanning
         setState(() => _isScanning = false);
-
-        // Process the QR code
         _scannerBloc.add(ScanQR(widget.purpose, scannedCode));
-
-        // Start cooldown timer
         _startScanCooldown();
       }
     });
@@ -321,13 +299,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
       _showSuccessAnimation = true;
     });
 
-    // Start success animation
     _successAnimationController.forward();
-
-    // Start pulse animation
     _pulseAnimationController.repeat(reverse: true);
 
-    // Hide animation after a delay
     Timer(const Duration(milliseconds: 800), () {
       if (mounted) {
         _successAnimationController.reverse().then((_) {
@@ -366,7 +340,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
       },
     }));
 
-    // Don't stop the camera, just stop the scanning process
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         setState(() => _isScanning = false);
@@ -481,8 +454,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
                       _isProcessingQR
                           ? 'Đang xử lý mã QR...'
                           : _isScanning
-                              ? 'Đặt mã QR vào khung để quét'
-                              : 'Quét tạm dừng. Nhấn "Thử lại" để tiếp tục.',
+                          ? 'Đặt mã QR vào khung để quét'
+                          : 'Quét tạm dừng. Nhấn "Thử lại" để tiếp tục.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: Colors.white, fontSize: 14),
                     ),
@@ -502,8 +475,27 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
                 ),
               ),
             ),
-            BlocBuilder<ScannerBloc, ScannerState>(
+
+            // CRITICAL FIX: Listen to state changes and rebuild dialog when state updates
+            BlocConsumer<ScannerBloc, ScannerState>(
               bloc: _scannerBloc,
+              listener: (context, state) {
+                // Listen for state changes and update local state
+                if (state is ScannerSuccess) {
+                  print("DEBUG: Scanner state changed to Success - isApiLoading: ${state.isApiLoading}");
+                  if (_isSubmitting && !state.isApiLoading) {
+                    print("DEBUG: API loading finished, stopping local submission state");
+                    setState(() {
+                      _isSubmitting = false;
+                    });
+                  }
+                } else if (state is ScannerFailure) {
+                  print("DEBUG: Scanner state changed to Failure");
+                  setState(() {
+                    _isSubmitting = false;
+                  });
+                }
+              },
               builder: (context, state) {
                 if (state is ScannerSuccess) {
                   final Map<String, dynamic> details = Map<String, dynamic>.from(state.result['details']);
@@ -512,8 +504,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
                       ? details['serial_number']?.toString() ?? ''
                       : details['device_serial']?.toString() ?? '';
 
-                  print("DEBUG: Showing success dialog with actions: $actions");
-                  print("DEBUG: Success details: $details");
+                  print("DEBUG: Building success dialog - isApiLoading: ${state.isApiLoading}, local _isSubmitting: $_isSubmitting");
 
                   return ResultDialog(
                     type: 'success',
@@ -521,41 +512,41 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
                     message: state.result['message'] as String,
                     details: details.map((key, value) => MapEntry(key, value.toString())),
                     actions: actions.map((e) => e.toString()).toList(),
-                    isLoading: _isSubmitting,
-                    isApiLoading: _isSubmitting && widget.purpose != 'firmware',
-                    isBluetoothLoading: _isSubmitting && widget.purpose == 'firmware',
-                    currentMode: widget.purpose, // Truyền purpose hiện tại để xác định mode (firmware là mode 2)
+                    isLoading: false, // Deprecated
+                    isApiLoading: state.isApiLoading, // Use state from bloc
+                    isBluetoothLoading: state.isBluetoothLoading, // Use state from bloc
+                    apiError: state.apiError, // Pass API error from state
+                    bluetoothError: state.bluetoothError, // Pass Bluetooth error from state
+                    currentMode: widget.purpose,
                     onSubmit: actions.contains('submit')
                         ? () {
-                            print("DEBUG: Submit button pressed with serial: $serial");
-                            _handleSubmit(serial);
-                      }
+                      print("DEBUG: Submit button pressed with serial: $serial");
+                      _handleSubmit(serial);
+                    }
                         : null,
                     onSendToDevice: widget.purpose == 'firmware' && actions.contains('send_to_device')
                         ? () {
-                            print("DEBUG: Send to device button pressed with serial: $serial");
-                            // Chỉ gửi qua Bluetooth service mà không gọi API
-                            if (mounted) {
-                              setState(() => _isSubmitting = true);
-                            }
-                            _scannerBloc.add(SendToDeviceOnly(serial, widget.purpose));
-                          }
+                      print("DEBUG: Send to device button pressed with serial: $serial");
+                      if (mounted) {
+                        setState(() => _isSubmitting = true);
+                      }
+                      _scannerBloc.add(SendToDeviceOnly(serial, widget.purpose));
+                    }
                         : null,
                     onRetry: actions.contains('retry')
                         ? () {
-                            print("DEBUG: Retry button pressed");
-                            _retryScanning();
-                      }
+                      print("DEBUG: Retry button pressed");
+                      _retryScanning();
+                    }
                         : null,
                     onDashboard: actions.contains('dashboard')
                         ? () {
-                            print("DEBUG: Dashboard button pressed");
-                            _safePop();
-                      }
+                      print("DEBUG: Dashboard button pressed");
+                      _safePop();
+                    }
                         : null,
                     onClose: () {
                       print("DEBUG: Dialog close button pressed - restarting scanner");
-                      // When dialog is dismissed, restart scanning like retry button
                       _retryScanning();
                     },
                   );
@@ -564,7 +555,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
                   final actions = state.error['details']['actions'] as List<dynamic>? ?? [];
                   final serial = details.containsKey('device_serial') ? details['device_serial'].toString() : '';
 
-                  print("DEBUG: Showing failure dialog with actions: $actions");
+                  print("DEBUG: Building failure dialog");
 
                   return ResultDialog(
                     type: 'error',
@@ -572,41 +563,39 @@ class _QRScannerScreenState extends State<QRScannerScreen> with TickerProviderSt
                     message: state.error['message'] as String,
                     details: details.map((key, value) => MapEntry(key, value.toString())),
                     actions: actions.map((e) => e.toString()).toList(),
-                    isLoading: _isSubmitting,
-                    isApiLoading: _isSubmitting && widget.purpose != 'firmware',
-                    isBluetoothLoading: _isSubmitting && widget.purpose == 'firmware',
-                    currentMode: widget.purpose, // Truyền purpose hiện tại để xác định mode
+                    isLoading: false, // Deprecated
+                    isApiLoading: false, // Always false for failure
+                    isBluetoothLoading: false, // Always false for failure
+                    currentMode: widget.purpose,
                     onSubmit: actions.contains('submit')
                         ? () {
-                            print("DEBUG: Submit button pressed with serial: $serial");
-                            _handleSubmit(serial);
-                      }
+                      print("DEBUG: Submit button pressed with serial: $serial");
+                      _handleSubmit(serial);
+                    }
                         : null,
                     onSendToDevice: widget.purpose == 'firmware' && actions.contains('send_to_device')
                         ? () {
-                            print("DEBUG: Send to device button pressed with serial: $serial");
-                            // Ch��� gửi qua Bluetooth service mà không gọi API
-                            if (mounted) {
-                              setState(() => _isSubmitting = true);
-                            }
-                            _scannerBloc.add(SendToDeviceOnly(serial, widget.purpose));
-                          }
+                      print("DEBUG: Send to device button pressed with serial: $serial");
+                      if (mounted) {
+                        setState(() => _isSubmitting = true);
+                      }
+                      _scannerBloc.add(SendToDeviceOnly(serial, widget.purpose));
+                    }
                         : null,
                     onRetry: actions.contains('retry')
                         ? () {
-                            print("DEBUG: Retry button pressed");
-                            _retryScanning();
-                      }
+                      print("DEBUG: Retry button pressed");
+                      _retryScanning();
+                    }
                         : null,
                     onDashboard: actions.contains('dashboard')
                         ? () {
-                            print("DEBUG: Dashboard button pressed");
-                            _safePop();
-                      }
+                      print("DEBUG: Dashboard button pressed");
+                      _safePop();
+                    }
                         : null,
                     onClose: () {
                       print("DEBUG: Dialog close button pressed - restarting scanner");
-                      // When dialog is dismissed, restart scanning like retry button
                       _retryScanning();
                     },
                   );

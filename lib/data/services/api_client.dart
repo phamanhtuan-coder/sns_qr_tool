@@ -31,6 +31,7 @@ class ApiClient {
         endpoint.startsWith('/stockout') ||
         endpoint.startsWith('/stock') ||
         endpoint.startsWith('/delivery') ||
+        endpoint.startsWith('/order') ||
         endpoint.startsWith('/shipper')) {
       print('DEBUG: Using SNS E-com URL for endpoint: $endpoint');
       return _snsEcomUrl;

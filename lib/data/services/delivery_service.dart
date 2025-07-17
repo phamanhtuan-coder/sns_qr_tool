@@ -8,52 +8,94 @@ class DeliveryService {
   final ApiClient _apiClient = getIt<ApiClient>();
 
   /// Lấy danh sách đơn hàng được phân cho shipper
-  /// Tương ứng với API: GET /admin/warehouse (với filter cho shipper)
+  /// Tương ứng với API: GET /order/shipper/:shipper_id
   Future<List<DeliveryOrder>> getAssignedOrders() async {
     try {
+      print('DEBUG: DeliveryService.getAssignedOrders() - Starting');
+
       // Lấy thông tin shipper hiện tại từ token
       final username = await _apiClient.getUsername();
+      print('DEBUG: DeliveryService.getAssignedOrders() - Username: $username');
+
       if (username == null) {
+        print('DEBUG: DeliveryService.getAssignedOrders() - No username found');
         throw Exception('Không tìm thấy thông tin tài khoản');
       }
 
-      // Gọi API để lấy đơn hàng cho warehouse employee (shipper)
-      // Filter theo shipper_id và status phù hợp
-      final result = await _apiClient.get('/order/admin/warehouse?filter=[{"field":"shipper_id","condition":"=","value":"$username"},{"field":"status","condition":"IN","value":"[2,3]"}]&logic=AND');
+      // Gọi API endpoint mới cho shipper cụ thể
+      print('DEBUG: DeliveryService.getAssignedOrders() - Calling API: /order/shipper/$username');
+      final result = await _apiClient.get('/order/shipper/$username');
+      print('DEBUG: DeliveryService.getAssignedOrders() - API Response: $result');
 
-      if (result['success'] == true && result['data'] != null) {
-        final ordersData = result['data']['data'] as List;
-        return ordersData.map((orderJson) => _mapOrderFromApi(orderJson)).toList();
+      // Xử lý response format mới từ API
+      if ((result['status_code'] == 200 || result['success'] == true) && result['data'] != null) {
+        final dataSection = result['data'];
+
+        // Kiểm tra nếu data section có 'data' field
+        if (dataSection is Map<String, dynamic> && dataSection['data'] != null) {
+          final ordersData = dataSection['data'];
+
+          // Xử lý trường hợp data là empty list hoặc null
+          if (ordersData is List) {
+            print('DEBUG: DeliveryService.getAssignedOrders() - Found ${ordersData.length} orders');
+
+            if (ordersData.isEmpty) {
+              print('DEBUG: DeliveryService.getAssignedOrders() - Empty orders list, returning empty');
+              return [];
+            }
+
+            final mappedOrders = ordersData.map((orderJson) => _mapOrderFromApi(orderJson)).toList();
+            print('DEBUG: DeliveryService.getAssignedOrders() - Successfully mapped ${mappedOrders.length} orders');
+            return mappedOrders;
+          } else {
+            print('DEBUG: DeliveryService.getAssignedOrders() - Orders data is not a list: $ordersData');
+            return [];
+          }
+        } else {
+          print('DEBUG: DeliveryService.getAssignedOrders() - Data section invalid: $dataSection');
+          return [];
+        }
       }
 
+      print('DEBUG: DeliveryService.getAssignedOrders() - No valid data found, returning empty list');
       return [];
     } catch (e, stackTrace) {
+      print('DEBUG: DeliveryService.getAssignedOrders() - Error: $e');
+      print('DEBUG: DeliveryService.getAssignedOrders() - Stack trace: $stackTrace');
       logError('Error loading delivery orders', e, stackTrace);
       throw Exception('Không thể tải danh sách đơn giao hàng: ${e.toString()}');
     }
   }
 
   /// Bắt đầu giao hàng cho một đơn hàng
-  /// Tương ứng với API: PATCH /admin/shipping-order
+  /// Tương ứng với API: PATCH /order/admin/shipping-order
   Future<Map<String, dynamic>> startDelivery(String orderId) async {
     try {
-      final result = await _apiClient.patch('/order/admin/shipping-order', {
-        'order_id': orderId,
-      });
+      print('DEBUG: DeliveryService.startDelivery() - Starting with orderId: $orderId');
+
+      final requestBody = {'order_id': orderId};
+      print('DEBUG: DeliveryService.startDelivery() - Request body: $requestBody');
+
+      final result = await _apiClient.patch('/order/admin/shipping-order', requestBody);
+      print('DEBUG: DeliveryService.startDelivery() - API Response: $result');
 
       if (result['success'] == true) {
+        print('DEBUG: DeliveryService.startDelivery() - Success');
         return {
           'success': true,
           'message': 'Đã bắt đầu giao hàng thành công',
           'data': result['data'],
         };
       } else {
+        print('DEBUG: DeliveryService.startDelivery() - Failed: ${result['message']}');
         return {
           'success': false,
           'message': result['message'] ?? 'Không thể bắt đầu giao hàng',
         };
       }
     } catch (e, stackTrace) {
+      print('DEBUG: DeliveryService.startDelivery() - Error: $e');
+      print('DEBUG: DeliveryService.startDelivery() - Stack trace: $stackTrace');
       logError('Error starting delivery', e, stackTrace);
       return {
         'success': false,
@@ -63,7 +105,7 @@ class DeliveryService {
   }
 
   /// Hoàn thành giao hàng với ảnh chứng minh
-  /// Tương ứng với API: PATCH /admin/finish-shipping-order
+  /// Tương ứng với API: PATCH /order/admin/finish-shipping-order
   Future<Map<String, dynamic>> completeDelivery({
     required String orderId,
     required String photoPath,
@@ -71,30 +113,45 @@ class DeliveryService {
     required bool isSuccessful,
   }) async {
     try {
+      print('DEBUG: DeliveryService.completeDelivery() - Starting');
+      print('DEBUG: DeliveryService.completeDelivery() - OrderId: $orderId');
+      print('DEBUG: DeliveryService.completeDelivery() - PhotoPath: $photoPath');
+      print('DEBUG: DeliveryService.completeDelivery() - Note: $note');
+      print('DEBUG: DeliveryService.completeDelivery() - IsSuccessful: $isSuccessful');
+
       // Chỉ gọi API nếu giao hàng thành công
       // Nếu thất bại, cần logic riêng (có thể cần API khác hoặc xử lý khác)
       if (isSuccessful) {
-        final result = await _apiClient.patch('/order/admin/finish-shipping-order', {
+        print('DEBUG: DeliveryService.completeDelivery() - Processing successful delivery');
+
+        final requestBody = {
           'order_id': orderId,
           'image_proof': photoPath, // Trong thực tế cần upload ảnh trước
-        });
+        };
+        print('DEBUG: DeliveryService.completeDelivery() - Request body: $requestBody');
+
+        final result = await _apiClient.patch('/order/admin/finish-shipping-order', requestBody);
+        print('DEBUG: DeliveryService.completeDelivery() - API Response: $result');
 
         if (result['success'] == true) {
+          print('DEBUG: DeliveryService.completeDelivery() - API call successful');
           return {
             'success': true,
             'message': 'Giao hàng thành công',
             'data': result['data'],
           };
         } else {
+          print('DEBUG: DeliveryService.completeDelivery() - API call failed: ${result['message']}');
           return {
             'success': false,
             'message': result['message'] ?? 'Không thể hoàn thành giao hàng',
           };
         }
       } else {
+        print('DEBUG: DeliveryService.completeDelivery() - Processing failed delivery (mock response)');
         // Logic cho trường hợp giao hàng thất bại
         // Có thể cần API riêng hoặc cập nhật trạng thái khác
-        return {
+        final mockResponse = {
           'success': true,
           'message': 'Đã ghi nhận giao hàng thất bại',
           'data': {
@@ -105,8 +162,12 @@ class DeliveryService {
             'is_successful': false,
           }
         };
+        print('DEBUG: DeliveryService.completeDelivery() - Mock response: $mockResponse');
+        return mockResponse;
       }
     } catch (e, stackTrace) {
+      print('DEBUG: DeliveryService.completeDelivery() - Error: $e');
+      print('DEBUG: DeliveryService.completeDelivery() - Stack trace: $stackTrace');
       logError('Error completing delivery', e, stackTrace);
       return {
         'success': false,
@@ -116,20 +177,33 @@ class DeliveryService {
   }
 
   /// Lấy chi tiết một đơn hàng
-  /// Tương ứng với API: GET /admin/detail/:order_id
+  /// Tương ứng với API: GET /order/admin/detail/:order_id
   Future<DeliveryOrder?> getOrderDetail(String orderId) async {
     try {
+      print('DEBUG: DeliveryService.getOrderDetail() - Starting with orderId: $orderId');
+
       final result = await _apiClient.get('/order/admin/detail/$orderId');
+      print('DEBUG: DeliveryService.getOrderDetail() - API Response: $result');
 
       if (result['success'] == true && result['data'] != null) {
         final orderData = result['data']['data'] as List;
+        print('DEBUG: DeliveryService.getOrderDetail() - Found ${orderData.length} order(s)');
+
         if (orderData.isNotEmpty) {
-          return _mapOrderFromApi(orderData.first);
+          final mappedOrder = _mapOrderFromApi(orderData.first);
+          print('DEBUG: DeliveryService.getOrderDetail() - Successfully mapped order: ${mappedOrder.id}');
+          return mappedOrder;
+        } else {
+          print('DEBUG: DeliveryService.getOrderDetail() - No order data found');
         }
+      } else {
+        print('DEBUG: DeliveryService.getOrderDetail() - API call failed or no data');
       }
 
       return null;
     } catch (e, stackTrace) {
+      print('DEBUG: DeliveryService.getOrderDetail() - Error: $e');
+      print('DEBUG: DeliveryService.getOrderDetail() - Stack trace: $stackTrace');
       logError('Error getting order detail', e, stackTrace);
       throw Exception('Không thể lấy chi tiết đơn hàng: ${e.toString()}');
     }
@@ -176,39 +250,88 @@ class DeliveryService {
   /// Lấy thống kê đơn hàng cho shipper
   Future<Map<String, dynamic>> getDeliveryStats() async {
     try {
+      print('DEBUG: DeliveryService.getDeliveryStats() - Starting');
+
       // Gọi API để lấy tất cả đơn hàng của shipper
       final username = await _apiClient.getUsername();
+      print('DEBUG: DeliveryService.getDeliveryStats() - Username: $username');
+
       if (username == null) {
+        print('DEBUG: DeliveryService.getDeliveryStats() - No username found');
         throw Exception('Không tìm thấy thông tin tài khoản');
       }
 
-      final result = await _apiClient.get('/order/admin/warehouse?filter=[{"field":"shipper_id","condition":"=","value":"$username"}]&logic=AND');
+      // Sử dụng endpoint mới
+      print('DEBUG: DeliveryService.getDeliveryStats() - Calling API: /order/shipper/$username');
+      final result = await _apiClient.get('/order/shipper/$username');
+      print('DEBUG: DeliveryService.getDeliveryStats() - API Response: $result');
 
-      if (result['success'] == true && result['data'] != null) {
-        final orders = result['data']['data'] as List;
+      // Xử lý response format mới từ API
+      if ((result['status_code'] == 200 || result['success'] == true) && result['data'] != null) {
+        final dataSection = result['data'];
 
-        // Tính toán thống kê
-        int totalOrders = orders.length;
-        int completedOrders = orders.where((order) => order['status'] == 4 || order['status'] == 5).length;
-        int pendingOrders = orders.where((order) => order['status'] == 2 || order['status'] == 3).length;
-        int failedOrders = orders.where((order) => order['status'] == -1).length;
+        // Kiểm tra nếu có shipperStats trong response
+        if (dataSection is Map<String, dynamic> && dataSection['shipperStats'] != null) {
+          final shipperStats = dataSection['shipperStats'] as Map<String, dynamic>;
+          print('DEBUG: DeliveryService.getDeliveryStats() - Found shipperStats: $shipperStats');
 
-        return {
-          'success': true,
-          'data': {
-            'total_orders': totalOrders,
-            'completed_orders': completedOrders,
-            'pending_orders': pendingOrders,
-            'failed_orders': failedOrders,
-          }
-        };
+          // Sử dụng stats từ API nếu có
+          return {
+            'success': true,
+            'data': {
+              'total_orders': (shipperStats['pending_shipping'] ?? 0) +
+                            (shipperStats['shipping'] ?? 0) +
+                            (shipperStats['delivered'] ?? 0) +
+                            (shipperStats['completed'] ?? 0),
+              'completed_orders': (shipperStats['delivered'] ?? 0) + (shipperStats['completed'] ?? 0),
+              'pending_orders': (shipperStats['pending_shipping'] ?? 0) + (shipperStats['shipping'] ?? 0),
+              'failed_orders': 0, // API chưa có field này
+            }
+          };
+        }
+
+        // Fallback: tính toán từ danh sách orders nếu không có shipperStats
+        if (dataSection['data'] != null && dataSection['data'] is List) {
+          final orders = dataSection['data'] as List;
+          print('DEBUG: DeliveryService.getDeliveryStats() - Found ${orders.length} orders, calculating stats');
+
+          // Tính toán thống kê
+          int totalOrders = orders.length;
+          int completedOrders = orders.where((order) => order['status'] == 4 || order['status'] == 5).length;
+          int pendingOrders = orders.where((order) => order['status'] == 2 || order['status'] == 3).length;
+          int failedOrders = orders.where((order) => order['status'] == -1).length;
+
+          print('DEBUG: DeliveryService.getDeliveryStats() - Statistics calculated:');
+          print('  Total: $totalOrders');
+          print('  Completed: $completedOrders');
+          print('  Pending: $pendingOrders');
+          print('  Failed: $failedOrders');
+
+          return {
+            'success': true,
+            'data': {
+              'total_orders': totalOrders,
+              'completed_orders': completedOrders,
+              'pending_orders': pendingOrders,
+              'failed_orders': failedOrders,
+            }
+          };
+        }
       }
 
+      print('DEBUG: DeliveryService.getDeliveryStats() - No data found, returning default stats');
       return {
-        'success': false,
-        'message': 'Không thể tải thống kê',
+        'success': true,
+        'data': {
+          'total_orders': 0,
+          'completed_orders': 0,
+          'pending_orders': 0,
+          'failed_orders': 0,
+        }
       };
     } catch (e, stackTrace) {
+      print('DEBUG: DeliveryService.getDeliveryStats() - Error: $e');
+      print('DEBUG: DeliveryService.getDeliveryStats() - Stack trace: $stackTrace');
       logError('Error getting delivery stats', e, stackTrace);
       return {
         'success': false,
@@ -220,23 +343,31 @@ class DeliveryService {
   /// Bắt đầu đơn shipping (tương ứng với startShippingOrder API)
   Future<Map<String, dynamic>> startShippingOrder(String orderId) async {
     try {
-      final result = await _apiClient.patch('/order/admin/shipping-order', {
-        'order_id': orderId,
-      });
+      print('DEBUG: DeliveryService.startShippingOrder() - Starting with orderId: $orderId');
+
+      final requestBody = {'order_id': orderId};
+      print('DEBUG: DeliveryService.startShippingOrder() - Request body: $requestBody');
+
+      final result = await _apiClient.patch('/order/admin/shipping-order', requestBody);
+      print('DEBUG: DeliveryService.startShippingOrder() - API Response: $result');
 
       if (result['success'] == true) {
+        print('DEBUG: DeliveryService.startShippingOrder() - Success');
         return {
           'success': true,
           'message': 'Đã bắt đầu giao hàng thành công',
           'data': result['data'],
         };
       } else {
+        print('DEBUG: DeliveryService.startShippingOrder() - Failed: ${result['message']}');
         return {
           'success': false,
           'message': result['message'] ?? 'Không thể bắt đầu giao hàng',
         };
       }
     } catch (e, stackTrace) {
+      print('DEBUG: DeliveryService.startShippingOrder() - Error: $e');
+      print('DEBUG: DeliveryService.startShippingOrder() - Stack trace: $stackTrace');
       logError('Error starting shipping order', e, stackTrace);
       return {
         'success': false,
@@ -251,24 +382,36 @@ class DeliveryService {
     required String imageProofBase64,
   }) async {
     try {
-      final result = await _apiClient.patch('/order/admin/finish-shipping-order', {
+      print('DEBUG: DeliveryService.confirmShippingOrder() - Starting');
+      print('DEBUG: DeliveryService.confirmShippingOrder() - OrderId: $orderId');
+      print('DEBUG: DeliveryService.confirmShippingOrder() - ImageProof length: ${imageProofBase64.length} characters');
+
+      final requestBody = {
         'order_id': orderId,
         'image_proof': imageProofBase64,
-      });
+      };
+      print('DEBUG: DeliveryService.confirmShippingOrder() - Request body keys: ${requestBody.keys.toList()}');
+
+      final result = await _apiClient.patch('/order/admin/finish-shipping-order', requestBody);
+      print('DEBUG: DeliveryService.confirmShippingOrder() - API Response: $result');
 
       if (result['success'] == true) {
+        print('DEBUG: DeliveryService.confirmShippingOrder() - Success');
         return {
           'success': true,
           'message': 'Hoàn thành giao hàng thành công',
           'data': result['data'],
         };
       } else {
+        print('DEBUG: DeliveryService.confirmShippingOrder() - Failed: ${result['message']}');
         return {
           'success': false,
           'message': result['message'] ?? 'Không thể hoàn thành giao hàng',
         };
       }
     } catch (e, stackTrace) {
+      print('DEBUG: DeliveryService.confirmShippingOrder() - Error: $e');
+      print('DEBUG: DeliveryService.confirmShippingOrder() - Stack trace: $stackTrace');
       logError('Error confirming shipping order', e, stackTrace);
       return {
         'success': false,
@@ -346,38 +489,52 @@ class DeliveryService {
 
   /// Map data từ API response sang DeliveryOrder model
   DeliveryOrder _mapOrderFromApi(Map<String, dynamic> orderJson) {
+    print('DEBUG: DeliveryService._mapOrderFromApi() - Starting mapping for order: ${orderJson['id']}');
+    print('DEBUG: DeliveryService._mapOrderFromApi() - Raw order data: $orderJson');
+
     // Map status từ backend sang DeliveryStatus enum
     DeliveryStatus mapStatus(int status) {
+      print('DEBUG: DeliveryService._mapOrderFromApi() - Mapping status: $status');
       switch (status) {
         case 2: // PENDING_SHIPPING
+          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: assigned');
           return DeliveryStatus.assigned;
         case 3: // SHIPPING
+          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: started');
           return DeliveryStatus.started;
         case 4: // DELIVERED
+          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: delivered');
           return DeliveryStatus.delivered;
         case 5: // COMPLETED
+          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: delivered (completed)');
           return DeliveryStatus.delivered;
         case -1: // CANCELLED
+          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: cancelled');
           return DeliveryStatus.cancelled;
         default:
+          print('DEBUG: DeliveryService._mapOrderFromApi() - Status mapped to: assigned (default)');
           return DeliveryStatus.assigned;
       }
     }
 
     // Map products từ API response
     List<DeliveryItem> mapProducts(List<dynamic>? products) {
+      print('DEBUG: DeliveryService._mapOrderFromApi() - Mapping products: ${products?.length ?? 0} items');
       if (products == null) return [];
 
-      return products.map((product) => DeliveryItem(
+      final mappedProducts = products.map((product) => DeliveryItem(
         id: product['id']?.toString() ?? '',
         name: product['name']?.toString() ?? '',
         quantity: product['quantity'] ?? 0,
         price: (product['sale_price'] ?? 0).toDouble(),
         description: product['description']?.toString(),
       )).toList();
+
+      print('DEBUG: DeliveryService._mapOrderFromApi() - Successfully mapped ${mappedProducts.length} products');
+      return mappedProducts;
     }
 
-    return DeliveryOrder(
+    final mappedOrder = DeliveryOrder(
       id: orderJson['id']?.toString() ?? '',
       customerName: orderJson['customer_name']?.toString() ?? '',
       customerPhone: _extractPhoneFromOrder(orderJson),
@@ -395,6 +552,15 @@ class DeliveryService {
       latitude: _getMockLatitude(),
       longitude: _getMockLongitude(),
     );
+
+    print('DEBUG: DeliveryService._mapOrderFromApi() - Mapped order successfully:');
+    print('  ID: ${mappedOrder.id}');
+    print('  Customer: ${mappedOrder.customerName}');
+    print('  Status: ${mappedOrder.status}');
+    print('  Items count: ${mappedOrder.items.length}');
+    print('  Total amount: ${mappedOrder.totalAmount}');
+
+    return mappedOrder;
   }
 
   String _extractPhoneFromOrder(Map<String, dynamic> orderJson) {

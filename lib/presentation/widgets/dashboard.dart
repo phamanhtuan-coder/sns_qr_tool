@@ -112,7 +112,7 @@ class _DashboardState extends State<Dashboard> {
           // Temporary button for shipper interface
           {
             'id': 'shipper',
-            'name': 'Giao hàng (Demo)',
+            'name': 'Giao hàng',
             'description': 'Giao diện dành cho shipper',
             'icon': Icons.delivery_dining,
             'color': const LinearGradient(colors: [Color(0xFF06B6D4), Color(0xFF0891B2)]),
